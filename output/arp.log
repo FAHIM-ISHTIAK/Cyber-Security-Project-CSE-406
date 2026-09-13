@@ -1,0 +1,8 @@
+[arp] iface=eth0 attacker_mac=c2:e2:c1:fe:cd:01
+[arp] client 172.20.0.20 is at d6:e1:49:74:22:dd
+[arp] server 172.20.0.10 is at d2:eb:fe:0d:f4:6d
+[arp] WARNING: could not enable IP forwarding ([Errno 30] Read-only file system: '/proc/sys/net/ipv4/ip_forward'). Run: echo 1 > /proc/sys/net/ipv4/ip_forward
+[arp] poisoning every 2.0s. Press Ctrl+C to stop and restore.
+
+[arp] stopping ...
+[arp] restoring real ARP entries on both victims ...

@@ -1,0 +1,72 @@
+[client] connecting to 172.20.0.10:9000 ...
+[client] connected 172.20.0.20:52068 -> 172.20.0.10:9000
+[client] stream: 1.79 MB, 120.0s video, playback ~15 KB/s
+[client] t=  0.0s  recv 0.02/1.79 MB ( 0.9%)  net 62427 KB/s  buffer  1.0s  play   0.0/120s 
+[client] t=  0.5s  recv 0.02/1.79 MB ( 0.9%)  net    32 KB/s  buffer  1.0s  play   0.0/120s 
+[client] t=  1.3s  recv 0.03/1.79 MB ( 1.7%)  net    25 KB/s  buffer  2.1s  play   0.0/120s 
+[client] >>> playback started (prebuffered 3s)
+[client] t=  2.1s  recv 0.05/1.79 MB ( 2.6%)  net    23 KB/s  buffer  2.6s  play   0.5/120s 
+[client] t=  2.9s  recv 0.06/1.79 MB ( 3.5%)  net    22 KB/s  buffer  2.9s  play   1.3/120s 
+[client] t=  3.6s  recv 0.08/1.79 MB ( 4.4%)  net    22 KB/s  buffer  3.2s  play   2.1/120s 
+[client] t=  4.4s  recv 0.09/1.79 MB ( 5.2%)  net    22 KB/s  buffer  3.4s  play   2.9/120s 
+[client] t=  5.2s  recv 0.11/1.79 MB ( 6.1%)  net    21 KB/s  buffer  3.7s  play   3.6/120s 
+[client] t=  6.0s  recv 0.12/1.79 MB ( 7.0%)  net    21 KB/s  buffer  4.0s  play   4.4/120s 
+[client] t=  6.8s  recv 0.14/1.79 MB ( 7.9%)  net    21 KB/s  buffer  4.2s  play   5.2/120s 
+[client] t=  7.6s  recv 0.16/1.79 MB ( 8.7%)  net    21 KB/s  buffer  4.5s  play   6.0/120s 
+[client] t=  8.4s  recv 0.17/1.79 MB ( 9.6%)  net    21 KB/s  buffer  4.7s  play   6.8/120s 
+[client] t=  9.1s  recv 0.19/1.79 MB (10.5%)  net    21 KB/s  buffer  5.0s  play   7.6/120s 
+[client] t=  9.9s  recv 0.20/1.79 MB (11.4%)  net    21 KB/s  buffer  5.3s  play   8.4/120s 
+[client] t= 10.7s  recv 0.22/1.79 MB (12.2%)  net    21 KB/s  buffer  5.5s  play   9.2/120s 
+[client] t= 11.5s  recv 0.23/1.79 MB (13.1%)  net    21 KB/s  buffer  5.8s  play   9.9/120s 
+[client] t= 12.3s  recv 0.25/1.79 MB (14.0%)  net    21 KB/s  buffer  6.1s  play  10.7/120s 
+[client] t= 13.1s  recv 0.27/1.79 MB (14.9%)  net    21 KB/s  buffer  6.3s  play  11.5/120s 
+[client] t= 13.9s  recv 0.28/1.79 MB (15.7%)  net    21 KB/s  buffer  6.6s  play  12.3/120s 
+[client] t= 14.7s  recv 0.30/1.79 MB (16.6%)  net    21 KB/s  buffer  6.8s  play  13.1/120s 
+[client] t= 15.4s  recv 0.31/1.79 MB (17.5%)  net    21 KB/s  buffer  7.1s  play  13.9/120s 
+[client] t= 16.2s  recv 0.33/1.79 MB (18.3%)  net    21 KB/s  buffer  7.4s  play  14.7/120s 
+[client] t= 17.0s  recv 0.34/1.79 MB (19.2%)  net    21 KB/s  buffer  7.6s  play  15.4/120s 
+[client] t= 17.8s  recv 0.36/1.79 MB (20.1%)  net    21 KB/s  buffer  7.9s  play  16.3/120s 
+[client] t= 18.6s  recv 0.38/1.79 MB (21.0%)  net    21 KB/s  buffer  8.1s  play  17.0/120s 
+[client] t= 19.4s  recv 0.39/1.79 MB (21.8%)  net    21 KB/s  buffer  8.4s  play  17.8/120s 
+[client] t= 20.2s  recv 0.41/1.79 MB (22.7%)  net    21 KB/s  buffer  8.7s  play  18.6/120s 
+[client] t= 20.9s  recv 0.42/1.79 MB (23.6%)  net    21 KB/s  buffer  8.9s  play  19.4/120s 
+[client] t= 21.7s  recv 0.44/1.79 MB (24.5%)  net    21 KB/s  buffer  9.2s  play  20.2/120s 
+[client] t= 22.5s  recv 0.45/1.79 MB (25.3%)  net    21 KB/s  buffer  9.5s  play  20.9/120s 
+[client] t= 23.3s  recv 0.47/1.79 MB (26.2%)  net    21 KB/s  buffer  9.7s  play  21.7/120s 
+[client] t= 24.1s  recv 0.48/1.79 MB (27.1%)  net    21 KB/s  buffer 10.0s  play  22.5/120s 
+[client] t= 24.9s  recv 0.50/1.79 MB (28.0%)  net    21 KB/s  buffer 10.2s  play  23.3/120s 
+[client] t= 25.7s  recv 0.52/1.79 MB (28.8%)  net    21 KB/s  buffer 10.5s  play  24.1/120s 
+[client] t= 26.4s  recv 0.53/1.79 MB (29.7%)  net    21 KB/s  buffer 10.8s  play  24.9/120s 
+[client] t= 27.2s  recv 0.55/1.79 MB (30.6%)  net    21 KB/s  buffer 11.0s  play  25.7/120s 
+[client] t= 28.0s  recv 0.56/1.79 MB (31.5%)  net    21 KB/s  buffer 11.3s  play  26.4/120s 
+[client] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[client] !!! TCP CONNECTION RESET (RST) received — peer sent a
+[client] !!! reset with NO preceding FIN. Socket torn down abruptly.
+[client] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[client] t= 28.5s  recv 0.58/1.79 MB (32.3%)  net    21 KB/s  buffer 11.9s  play  26.9/120s [buffering-out]
+[client] t= 29.0s  recv 0.58/1.79 MB (32.3%)  net    20 KB/s  buffer 11.4s  play  27.4/120s [buffering-out]
+[client] t= 29.5s  recv 0.58/1.79 MB (32.3%)  net    20 KB/s  buffer 10.9s  play  27.9/120s [buffering-out]
+[client] t= 30.0s  recv 0.58/1.79 MB (32.3%)  net    20 KB/s  buffer 10.4s  play  28.4/120s [buffering-out]
+[client] t= 30.5s  recv 0.58/1.79 MB (32.3%)  net    19 KB/s  buffer  9.9s  play  28.9/120s [buffering-out]
+[client] t= 31.0s  recv 0.58/1.79 MB (32.3%)  net    19 KB/s  buffer  9.4s  play  29.4/120s [buffering-out]
+[client] t= 31.5s  recv 0.58/1.79 MB (32.3%)  net    19 KB/s  buffer  8.9s  play  29.9/120s [buffering-out]
+[client] t= 32.0s  recv 0.58/1.79 MB (32.3%)  net    19 KB/s  buffer  8.4s  play  30.4/120s [buffering-out]
+[client] t= 32.5s  recv 0.58/1.79 MB (32.3%)  net    18 KB/s  buffer  7.9s  play  30.9/120s [buffering-out]
+[client] t= 33.0s  recv 0.58/1.79 MB (32.3%)  net    18 KB/s  buffer  7.4s  play  31.4/120s [buffering-out]
+[client] t= 33.5s  recv 0.58/1.79 MB (32.3%)  net    18 KB/s  buffer  6.9s  play  31.9/120s [buffering-out]
+[client] t= 34.0s  recv 0.58/1.79 MB (32.3%)  net    17 KB/s  buffer  6.4s  play  32.4/120s [buffering-out]
+[client] t= 34.5s  recv 0.58/1.79 MB (32.3%)  net    17 KB/s  buffer  5.9s  play  32.9/120s [buffering-out]
+[client] t= 35.0s  recv 0.58/1.79 MB (32.3%)  net    17 KB/s  buffer  5.4s  play  33.4/120s [buffering-out]
+[client] t= 35.5s  recv 0.58/1.79 MB (32.3%)  net    17 KB/s  buffer  4.9s  play  33.9/120s [buffering-out]
+[client] t= 36.0s  recv 0.58/1.79 MB (32.3%)  net    16 KB/s  buffer  4.4s  play  34.4/120s [buffering-out]
+[client] t= 36.5s  recv 0.58/1.79 MB (32.3%)  net    16 KB/s  buffer  3.9s  play  34.9/120s [buffering-out]
+[client] t= 37.0s  recv 0.58/1.79 MB (32.3%)  net    16 KB/s  buffer  3.4s  play  35.4/120s [buffering-out]
+[client] t= 37.5s  recv 0.58/1.79 MB (32.3%)  net    16 KB/s  buffer  2.9s  play  35.9/120s [buffering-out]
+[client] t= 38.0s  recv 0.58/1.79 MB (32.3%)  net    16 KB/s  buffer  2.4s  play  36.4/120s [buffering-out]
+[client] t= 38.5s  recv 0.58/1.79 MB (32.3%)  net    15 KB/s  buffer  1.9s  play  36.9/120s [buffering-out]
+[client] t= 39.0s  recv 0.58/1.79 MB (32.3%)  net    15 KB/s  buffer  1.4s  play  37.4/120s [buffering-out]
+[client] t= 39.5s  recv 0.58/1.79 MB (32.3%)  net    15 KB/s  buffer  0.9s  play  37.9/120s [buffering-out]
+[client] t= 40.0s  recv 0.58/1.79 MB (32.3%)  net    15 KB/s  buffer  0.4s  play  38.4/120s [buffering-out]
+[client] t= 40.5s  recv 0.58/1.79 MB (32.3%)  net    15 KB/s  buffer  0.0s  play  38.8/120s [BUFFER EMPTY]
+[client] ⛔ PLAYBACK STALLED — buffer exhausted, network/connection error.
+[client]    Received 0.58/1.79 MB before the reset.

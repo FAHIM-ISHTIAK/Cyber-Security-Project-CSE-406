@@ -1,0 +1,5 @@
+output/*.mp4
+output/*.pcap
+!output/.gitkeep
+__pycache__/
+*.pyc

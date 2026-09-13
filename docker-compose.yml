@@ -1,0 +1,70 @@
+# TCP Reset Attack on Video Streaming — Phase 1: Single-PC Docker simulation.
+# Three containers on one user-defined bridge network (the "attacknet"),
+# reproducing the on-path/LAN-local threat model without physical hardware.
+#
+#   streamserver 172.20.0.10  — serves the video over one long-lived TCP socket
+#   videoclient  172.20.0.20  — the victim player
+#   attacker     172.20.0.30  — ARP-poisons, sniffs, injects the forged RST
+#
+# Only the attacker gets NET_ADMIN + NET_RAW (raw sockets, forged ARP/IP,
+# IP forwarding). The server and client need no special privileges.
+
+services:
+  streamserver:
+    build: ./server
+    image: rst-demo/streamserver
+    container_name: streamserver
+    hostname: streamserver
+    networks:
+      attacknet:
+        ipv4_address: 172.20.0.10
+    # Optional: expose the stream to the host for inspection.
+    ports:
+      - "9000:9000"
+
+  videoclient:
+    build: ./client
+    image: rst-demo/videoclient
+    container_name: videoclient
+    hostname: videoclient
+    depends_on:
+      - streamserver
+    environment:
+      SERVER_IP: "172.20.0.10"
+      SERVER_PORT: "9000"
+      OUTFILE: "/out/received.mp4"
+      # Set RECONNECT=1 to measure client auto-retry behaviour (spec Section 5).
+      RECONNECT: "0"
+    volumes:
+      - ./output:/out
+    networks:
+      attacknet:
+        ipv4_address: 172.20.0.20
+
+  attacker:
+    build: ./attacker
+    image: rst-demo/attacker
+    container_name: attacker
+    hostname: attacker
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      CLIENT_IP: "172.20.0.20"
+      SERVER_IP: "172.20.0.10"
+      SERVER_PORT: "9000"
+      IFACE: "eth0"
+    volumes:
+      - ./output:/out
+    networks:
+      attacknet:
+        ipv4_address: 172.20.0.30
+
+networks:
+  attacknet:
+    name: attacknet
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1
