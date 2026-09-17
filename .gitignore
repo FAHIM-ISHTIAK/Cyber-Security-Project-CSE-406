@@ -3,3 +3,11 @@ output/*.pcap
 !output/.gitkeep
 __pycache__/
 *.pyc
+
+# Phase 2 (physical) generated artifacts
+phase2/media/*.mp4
+phase2/output/*.mp4
+phase2/output/*.bin
+phase2/output/*.pcap
+!phase2/media/.gitkeep
+!phase2/output/.gitkeep

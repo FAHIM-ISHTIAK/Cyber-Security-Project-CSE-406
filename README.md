@@ -216,6 +216,9 @@ output/                                   saved stream + pcaps (host-mounted)
 | §6.2 ARP-layer defense                      | `defense/static_arp.sh`                      |
 
 Implementation Phases **A–E** of the proposal are all covered here inside
-Docker; Phase 2 (three physical machines) reuses the same `attacker/` scripts
-unchanged — only the IPs and `-i <iface>` change.
-```
+Docker; Phase 2 (three physical machines) reuses the same `attacker/`, `server/`,
+and `client/` code unchanged — only the IPs and interface change.
+
+**➡️ For the physical three-machine demonstration, see [phase2/README.md](phase2/README.md).**
+It adds native (no-Docker) launcher scripts and a setup guide tailored to a
+Linux-VM attacker on a Wi-Fi LAN.

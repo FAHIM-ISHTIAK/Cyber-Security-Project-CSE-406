@@ -24,6 +24,16 @@ import struct
 import sys
 import time
 
+# Phase 2 runs this client natively on mixed OSes. On a Windows console the
+# default code page (cp1252) cannot encode the status emoji and print() would
+# crash at the success/stall message. Force UTF-8 with a safe fallback so the
+# same code runs identically in a Linux container and on a native Windows host.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 SERVER_IP = os.environ.get("SERVER_IP", "172.20.0.10")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "9000"))
 OUTFILE = os.environ.get("OUTFILE", "/out/received.mp4")
