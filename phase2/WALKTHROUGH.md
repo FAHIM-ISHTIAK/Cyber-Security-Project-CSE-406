@@ -169,8 +169,12 @@ phase2/server/run_server.sh
 powershell -ExecutionPolicy Bypass -File phase2\server\run_server.ps1
 ```
 
-It auto-generates a 120-second test video (if `ffmpeg` is installed) and serves
-it on `0.0.0.0:9000`. Expected output:
+If `ffmpeg` is installed it auto-generates a 120-second test video; if not, it
+generates an ~8 MB **synthetic placeholder** (not a playable video, but fine for
+the attack — the stream is just bytes). It then serves on `0.0.0.0:9000`. To get
+a real, playable saved clip for Proof #3, install ffmpeg first
+(`winget install Gyan.FFmpeg`), delete `phase2/media/sample.mp4`, and re-run.
+Expected output:
 
 ```
 [server] no media file; generating a 120s test video at .../phase2/media/sample.mp4 ...

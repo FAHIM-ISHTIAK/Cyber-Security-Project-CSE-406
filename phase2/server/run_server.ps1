@@ -31,8 +31,19 @@ if (-not (Test-Path $Media)) {
             -c:v libx264 -preset veryfast -pix_fmt yuv420p `
             -c:a aac -shortest "$Media"
     } else {
-        Write-Error "media file $Media missing and ffmpeg not installed. Install ffmpeg or set `$env:MEDIA to a video path."
-        exit 1
+        # No ffmpeg: generate a synthetic placeholder so the demo isn't blocked.
+        # The RST attack only needs a byte stream; this file is NOT a playable
+        # video. Install ffmpeg (winget install Gyan.FFmpeg) if you want a real,
+        # playable saved clip for the "partial video" proof.
+        $Mb = if ($env:MEDIA_MB) { [int]$env:MEDIA_MB } else { 8 }
+        Write-Host "[server] ffmpeg not found; generating a $Mb MB synthetic placeholder at $Media"
+        Write-Host "[server] (NOTE: not a playable video - fine for the attack demo. Install ffmpeg for a real clip.)"
+        New-Item -ItemType Directory -Force (Split-Path $Media) | Out-Null
+        $fs  = [System.IO.File]::Create($Media)
+        $buf = New-Object byte[] 1048576
+        $rng = [System.Random]::new()
+        for ($i = 0; $i -lt $Mb; $i++) { $rng.NextBytes($buf); $fs.Write($buf, 0, $buf.Length) }
+        $fs.Close()
     }
 }
 

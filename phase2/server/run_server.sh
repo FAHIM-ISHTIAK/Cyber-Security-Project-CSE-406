@@ -34,9 +34,14 @@ if [ ! -f "$MEDIA" ]; then
             -c:v libx264 -preset veryfast -pix_fmt yuv420p \
             -c:a aac -shortest "$MEDIA"
     else
-        echo "[server] FATAL: media file $MEDIA missing and ffmpeg not installed."
-        echo "[server]        Install ffmpeg, or set MEDIA=/path/to/your/video.mp4"
-        exit 1
+        # No ffmpeg: generate a synthetic placeholder so the demo isn't blocked.
+        # The RST attack only needs a byte stream; this file is NOT a playable
+        # video. Install ffmpeg if you want a real, playable saved clip.
+        MB="${MEDIA_MB:-8}"
+        echo "[server] ffmpeg not found; generating a ${MB} MB synthetic placeholder at $MEDIA"
+        echo "[server] (NOTE: not a playable video — fine for the attack demo. Install ffmpeg for a real clip.)"
+        mkdir -p "$(dirname "$MEDIA")"
+        head -c "$((MB * 1024 * 1024))" /dev/urandom > "$MEDIA"
     fi
 fi
 
