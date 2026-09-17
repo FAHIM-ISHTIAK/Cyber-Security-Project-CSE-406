@@ -128,11 +128,12 @@ attack cannot work until preflight passes.
 - **Windows:** `powershell -ExecutionPolicy Bypass -File phase2\server\run_server.ps1`
 - **Linux/macOS:** `phase2/server/run_server.sh`
 
-It prints its LAN IP (that's **SERVER_IP**) and serves a 120s test video
-(auto-generated with ffmpeg; without ffmpeg it makes an ~8 MB synthetic
-placeholder that works for the attack but is not playable; or set
-`MEDIA=/path/to/video.mp4`). If the client cannot connect, allow inbound TCP 9000
-through the server's firewall (the launcher prints the exact command).
+It prints its LAN IP (that's **SERVER_IP**) and streams the video at
+`phase2/media/sample.mp4` if present (put your own video there, or set
+`MEDIA=/path/to/video.mp4`); otherwise it auto-generates a 120s clip with ffmpeg
+(or an ~8 MB synthetic placeholder if ffmpeg is missing — works for the attack
+but not playable). If the client cannot connect, allow inbound TCP 9000 through
+the server's firewall (the launcher prints the exact command).
 
 ### PC 2 — Client / victim (start second)
 - **Windows:** `powershell -ExecutionPolicy Bypass -File phase2\client\run_client.ps1 <SERVER_IP>`

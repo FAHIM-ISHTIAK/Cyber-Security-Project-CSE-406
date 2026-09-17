@@ -21,24 +21,23 @@ $Media         = if ($env:MEDIA) { $env:MEDIA } else { Join-Path $MediaDir "samp
 
 if (-not (Test-Path $ServerPy)) { Write-Error "$ServerPy not found (copy the whole repo to this machine)"; exit 1 }
 
+# Use the video at $Media (default: phase2\media\sample.mp4) if it exists;
+# otherwise generate a 120s test-pattern video with ffmpeg. Put your own video
+# at phase2\media\sample.mp4 (or set $env:MEDIA) to stream it.
 if (-not (Test-Path $Media)) {
+    New-Item -ItemType Directory -Force (Split-Path $Media) | Out-Null
     if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
         Write-Host "[server] no media file; generating a 120s test video at $Media ..."
-        New-Item -ItemType Directory -Force (Split-Path $Media) | Out-Null
         ffmpeg -hide_banner -loglevel error `
             -f lavfi -i "testsrc=size=640x360:rate=25:duration=120" `
             -f lavfi -i "sine=frequency=1000:duration=120" `
             -c:v libx264 -preset veryfast -pix_fmt yuv420p `
             -c:a aac -shortest "$Media"
     } else {
-        # No ffmpeg: generate a synthetic placeholder so the demo isn't blocked.
-        # The RST attack only needs a byte stream; this file is NOT a playable
-        # video. Install ffmpeg (winget install Gyan.FFmpeg) if you want a real,
-        # playable saved clip for the "partial video" proof.
+        # No ffmpeg: synthetic placeholder so the demo isn't blocked.
         $Mb = if ($env:MEDIA_MB) { [int]$env:MEDIA_MB } else { 8 }
         Write-Host "[server] ffmpeg not found; generating a $Mb MB synthetic placeholder at $Media"
         Write-Host "[server] (NOTE: not a playable video - fine for the attack demo. Install ffmpeg for a real clip.)"
-        New-Item -ItemType Directory -Force (Split-Path $Media) | Out-Null
         $fs  = [System.IO.File]::Create($Media)
         $buf = New-Object byte[] 1048576
         $rng = [System.Random]::new()

@@ -23,24 +23,23 @@ MEDIA="${MEDIA:-$MEDIA_DIR/sample.mp4}"
 
 [ -f "$SERVER_PY" ] || { echo "[server] FATAL: $SERVER_PY not found (copy the whole repo to this machine)"; exit 1; }
 
-# Ensure a media file exists; generate a test-pattern video if ffmpeg is present.
+# Use the video at $MEDIA (default: phase2/media/sample.mp4) if it exists;
+# otherwise generate a 120s test-pattern video with ffmpeg. Put your own video
+# at phase2/media/sample.mp4 (or set MEDIA=/path/to/video.mp4) to stream it.
 if [ ! -f "$MEDIA" ]; then
+    mkdir -p "$(dirname "$MEDIA")"
     if command -v ffmpeg >/dev/null 2>&1; then
         echo "[server] no media file; generating a 120s test video at $MEDIA ..."
-        mkdir -p "$(dirname "$MEDIA")"
         ffmpeg -hide_banner -loglevel error \
             -f lavfi -i testsrc=size=640x360:rate=25:duration=120 \
             -f lavfi -i sine=frequency=1000:duration=120 \
             -c:v libx264 -preset veryfast -pix_fmt yuv420p \
             -c:a aac -shortest "$MEDIA"
     else
-        # No ffmpeg: generate a synthetic placeholder so the demo isn't blocked.
-        # The RST attack only needs a byte stream; this file is NOT a playable
-        # video. Install ffmpeg if you want a real, playable saved clip.
+        # No ffmpeg: synthetic placeholder so the demo isn't blocked.
         MB="${MEDIA_MB:-8}"
         echo "[server] ffmpeg not found; generating a ${MB} MB synthetic placeholder at $MEDIA"
-        echo "[server] (NOTE: not a playable video — fine for the attack demo. Install ffmpeg for a real clip.)"
-        mkdir -p "$(dirname "$MEDIA")"
+        echo "[server] (NOTE: not a playable video - fine for the attack demo. Install ffmpeg for a real clip.)"
         head -c "$((MB * 1024 * 1024))" /dev/urandom > "$MEDIA"
     fi
 fi
