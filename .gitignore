@@ -11,3 +11,6 @@ phase2/output/*.bin
 phase2/output/*.pcap
 !phase2/media/.gitkeep
 !phase2/output/.gitkeep
+
+venv/
+.venv/

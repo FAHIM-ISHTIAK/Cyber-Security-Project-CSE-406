@@ -21,14 +21,19 @@ done
 [ -n "$SERVER" ] && [ -n "$CLIENT" ] || { echo "usage: sudo $0 --server <ip> --client <ip> [-i iface]"; exit 1; }
 [ "$(id -u)" -eq 0 ] || { echo "run as root: sudo $0 ..."; exit 1; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PY="$SCRIPT_DIR/venv/bin/python"
+[ -x "$VENV_PY" ] || VENV_PY="$(command -v python3)"
+
 fail=0
 note() { printf '  [%s] %s\n' "$1" "$2"; }
 
 echo "== Tooling =="
-for t in python3 tcpdump ip arpspoof; do
-    if command -v "$t" >/dev/null 2>&1; then note OK "$t present"; else note "!!" "$t MISSING (run ./setup.sh)"; fail=1; fi
+for t in tcpdump ip arpspoof; do
+    if command -v "$t" >/dev/null 2>&1; then note OK "$t present"; else note "!!" "$t MISSING (run ./setup.sh)"; fi
 done
-if python3 -c "import scapy" 2>/dev/null; then note OK "python scapy importable"; else note "!!" "scapy MISSING (run ./setup.sh)"; fail=1; fi
+if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then note OK "venv present"; else note "!!" "venv MISSING (run ./setup.sh)"; fail=1; fi
+if "$VENV_PY" -c "import scapy" 2>/dev/null; then note OK "scapy importable in venv"; else note "!!" "scapy MISSING (run ./setup.sh)"; fail=1; fi
 
 echo "== Interface =="
 # Auto-detect the interface that reaches the server if not given.

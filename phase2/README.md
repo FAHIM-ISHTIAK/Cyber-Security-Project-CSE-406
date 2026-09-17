@@ -110,7 +110,7 @@ subnet** as the victims (e.g. `192.168.1.x`, *not* `10.0.2.x` NAT or a
 Inside the Linux VM, from the repo's `phase2/attacker/` folder:
 
 ```bash
-sudo ./setup.sh                                   # scapy, dsniff, tcpdump, ...
+./setup.sh                                        # creates venv, installs scapy + system libs (uses sudo only for apt)
 sudo ./preflight.sh --server <SERVER_IP> --client <CLIENT_IP>
 ```
 
