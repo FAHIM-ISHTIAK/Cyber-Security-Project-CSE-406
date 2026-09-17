@@ -17,7 +17,7 @@ $MediaDir  = Join-Path $RepoRoot "phase2\media"
 
 $Port          = if ($env:PORT) { $env:PORT } else { "9000" }
 $StreamSeconds = if ($env:STREAM_SECONDS) { $env:STREAM_SECONDS } else { "120" }
-$Media         = if ($env:MEDIA) { $env:MEDIA } else { Join-Path $MediaDir "sample.mp4" }
+$Media         = if ($env:MEDIA) { $env:MEDIA } else { Join-Path $MediaDir "Brawl_Stars_x_Duolingo.mp4" }
 
 if (-not (Test-Path $ServerPy)) { Write-Error "$ServerPy not found (copy the whole repo to this machine)"; exit 1 }
 
