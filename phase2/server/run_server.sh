@@ -18,7 +18,8 @@ SERVER_PY="$REPO_ROOT/server/stream_server.py"
 MEDIA_DIR="$REPO_ROOT/phase2/media"
 
 PORT="${PORT:-9000}"
-STREAM_SECONDS="${STREAM_SECONDS:-120}"
+# STREAM_SECONDS is intentionally NOT defaulted: if unset, the server auto-paces
+# at the video's real duration (via ffprobe). Export it only if you set it.
 
 [ -f "$SERVER_PY" ] || { echo "[server] FATAL: $SERVER_PY not found (copy the whole repo to this machine)"; exit 1; }
 
@@ -79,5 +80,7 @@ echo "[server] Serving $MEDIA on 0.0.0.0:$PORT (Ctrl+C to stop)"
 echo "[server] macOS/Linux firewall: allow inbound TCP $PORT if the client cannot connect."
 echo "[server] ------------------------------------------------------------"
 
-export BIND_ADDR="0.0.0.0" PORT MEDIA STREAM_SECONDS
+export BIND_ADDR="0.0.0.0" PORT MEDIA
+# Pass STREAM_SECONDS through only if you set it; otherwise the server auto-paces.
+[ -n "${STREAM_SECONDS:-}" ] && export STREAM_SECONDS
 exec python3 "$SERVER_PY"

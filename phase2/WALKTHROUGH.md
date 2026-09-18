@@ -175,6 +175,9 @@ source video — `phase2/media/sample.mp4` by default, or `MEDIA=/path/to/video`
 or the file named in the launcher — and **auto-converts it to `stream.ts`** with
 `ffmpeg`. If no source exists it generates a 120s `.ts` test clip; if `ffmpeg`
 isn't installed it falls back to a non-playable placeholder (attack still works).
+Delivery is **auto-paced at the video's real duration** (via ffprobe) so playback
+is smooth without tuning — set `STREAM_SECONDS` only to override (smaller = faster
+= bigger client buffer).
 
 It then serves on `0.0.0.0:9000`. Expected output:
 

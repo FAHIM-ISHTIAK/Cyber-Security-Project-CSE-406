@@ -15,8 +15,10 @@ $RepoRoot  = (Resolve-Path "$ScriptDir\..\..").Path
 $ServerPy  = Join-Path $RepoRoot "server\stream_server.py"
 $MediaDir  = Join-Path $RepoRoot "phase2\media"
 
-$Port          = if ($env:PORT) { $env:PORT } else { "9000" }
-$StreamSeconds = if ($env:STREAM_SECONDS) { $env:STREAM_SECONDS } else { "120" }
+$Port = if ($env:PORT) { $env:PORT } else { "9000" }
+# STREAM_SECONDS is intentionally NOT defaulted here: if you leave it unset the
+# server auto-paces at the video's real duration (via ffprobe). Set it to
+# override (e.g. $env:STREAM_SECONDS="30" for a bigger buffer).
 
 if (-not (Test-Path $ServerPy)) { Write-Error "$ServerPy not found (copy the whole repo to this machine)"; exit 1 }
 
@@ -77,5 +79,6 @@ Write-Host "[server] -----------------------------------------------------------
 $env:BIND_ADDR = "0.0.0.0"
 $env:PORT = $Port
 $env:MEDIA = $Media
-$env:STREAM_SECONDS = $StreamSeconds
+# Leave $env:STREAM_SECONDS untouched: if you set it, the server honours it;
+# if not, the server auto-paces at the video's real duration.
 python "$ServerPy"

@@ -70,10 +70,40 @@ def human_mb(b: int) -> str:
     return f"{b / 1_048_576:.2f}"
 
 
+def find_player_exe(name: str):
+    """Locate ffplay/mpv even if it is not on PATH yet.
+
+    Right after `winget install ffmpeg`, an already-open shell has a stale PATH,
+    so shutil.which() misses it. Fall back to the usual Windows install spots.
+    """
+    p = shutil.which(name)
+    if p:
+        return p
+    if os.name == "nt":
+        import glob
+        local = os.environ.get("LOCALAPPDATA", "")
+        progdata = os.environ.get("ProgramData", r"C:\ProgramData")
+        patterns = [
+            os.path.join(local, "Microsoft", "WinGet", "Packages", "*FFmpeg*", "**", name + ".exe"),
+            os.path.join(local, "Microsoft", "WinGet", "Packages", "*" + name + "*", "**", name + ".exe"),
+            os.path.join(local, "Microsoft", "WinGet", "Links", name + ".exe"),
+            os.path.join(progdata, "chocolatey", "bin", name + ".exe"),
+            os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "**", name + ".exe"),
+        ]
+        for pat in patterns:
+            try:
+                hits = glob.glob(pat, recursive=True)
+            except Exception:
+                hits = []
+            if hits:
+                return hits[0]
+    return None
+
+
 def start_player():
     """Start a real media player reading the stream from stdin (tee mode).
 
-    Returns (Popen, name) or (None, None) if disabled or no player is installed.
+    Returns (Popen, name) or (None, None) if disabled or no player is found.
     ffplay/mpv both play a streamable container (MPEG-TS) progressively and stop
     when the pipe ends (i.e. when the RST cuts the stream), which is exactly the
     behaviour we want to show.
@@ -82,19 +112,20 @@ def start_player():
         return None, None
     order = {"auto": ["ffplay", "mpv"], "ffplay": ["ffplay"], "mpv": ["mpv"]}.get(
         PLAYER, ["ffplay", "mpv"])
-    cmds = {
-        "ffplay": ["ffplay", "-hide_banner", "-loglevel", "warning", "-autoexit",
-                   "-window_title", "RST demo — victim playback", "-i", "-"],
-        "mpv":    ["mpv", "--really-quiet", "--force-window=yes",
-                   "--title=RST demo — victim playback", "-"],
+    argsets = {
+        "ffplay": ["-hide_banner", "-loglevel", "warning", "-autoexit",
+                   "-window_title", "RST demo - victim playback", "-i", "-"],
+        "mpv":    ["--really-quiet", "--force-window=yes",
+                   "--title=RST demo - victim playback", "-"],
     }
     for name in order:
-        if shutil.which(name):
+        exe = find_player_exe(name)
+        if exe:
             try:
-                proc = subprocess.Popen(cmds[name], stdin=subprocess.PIPE)
+                proc = subprocess.Popen([exe] + argsets[name], stdin=subprocess.PIPE)
                 return proc, name
             except Exception as e:
-                print(f"[client] could not start {name}: {e}", flush=True)
+                print(f"[client] could not start {name} ({exe}): {e}", flush=True)
     return None, None
 
 

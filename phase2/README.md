@@ -133,8 +133,11 @@ source video (`phase2/media/sample.mp4` by default, or `MEDIA=/path/to/video`,
 or the file named in the launcher) and auto-converts it to `stream.ts`; if no
 source exists it generates a 120s `.ts` clip (or a non-playable placeholder if
 ffmpeg is missing). TS is used so the client can play progressively and a
-truncated copy still plays up to the RST cut. If the client cannot connect, allow
-inbound TCP 9000 through the server's firewall (the launcher prints the command).
+truncated copy still plays up to the RST cut. Delivery is **auto-paced at the
+video's real duration** (via ffprobe), so playback is smooth with no tuning; set
+`STREAM_SECONDS` to override (smaller = faster = bigger client buffer). If the
+client cannot connect, allow inbound TCP 9000 through the server's firewall (the
+launcher prints the command).
 
 ### PC 2 — Client / victim (start second)
 - **Windows:** `powershell -ExecutionPolicy Bypass -File phase2\client\run_client.ps1 <SERVER_IP>`
