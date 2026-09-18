@@ -1,5 +1,5 @@
 <#
-defend.ps1 - Phase 2 one-shot defense driver for a WINDOWS victim (§6.2).
+defend.ps1 - Phase 2 one-shot defense driver for a WINDOWS victim (section 6.2).
 Run in an ELEVATED PowerShell (Admin), BEFORE launching the attacker.
 
 Ties the two ARP-layer defenses together for one victim machine:
@@ -35,8 +35,27 @@ param(
 $here   = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $static = Join-Path $here "static_arp.ps1"
 $watchpy= Join-Path $here "arp_watch.py"
-$py     = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $py) { $py = (Get-Command python3 -ErrorAction SilentlyContinue).Source }
+# Resolve a REAL Python, skipping the Windows Store stub (the fake python.exe in
+# WindowsApps that prints "Python was not found"). Prefer the 'py' launcher.
+$py = $null; $pyPre = @()
+$launcher = (Get-Command py -ErrorAction SilentlyContinue).Source
+if ($launcher) {
+    try { & $launcher -3 --version *> $null; if ($LASTEXITCODE -eq 0) { $py = $launcher; $pyPre = @('-3') } } catch {}
+}
+if (-not $py) {
+    foreach ($name in 'python', 'python3') {
+        foreach ($c in (Get-Command $name -All -ErrorAction SilentlyContinue)) {
+            if ($c.Source -and $c.Source -notmatch '\\WindowsApps\\') {
+                try { & $c.Source --version *> $null; if ($LASTEXITCODE -eq 0) { $py = $c.Source; break } } catch {}
+            }
+        }
+        if ($py) { break }
+    }
+}
+if (-not $py) {
+    $guess = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($guess) { $py = $guess.FullName }
+}
 
 function Test-Admin {
     $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -75,11 +94,12 @@ Pin-One $Peer $PeerMac
 if ($Gateway) { Pin-One $Gateway "" }
 
 if ($Watch -or $PinWatch) {
-    if (-not $py) { Write-Error "python not found; install Python 3 to run the arp_watch monitor."; exit 1 }
+    if (-not $py) { Write-Error "No real Python found (only the Windows Store stub). Install Python 3 from python.org, or run: winget install Python.Python.3.12"; exit 1 }
+    Write-Host "[defense] using Python: $py $($pyPre -join ' ')"
     Write-Host "[defense] starting ARP monitor (Ctrl+C to stop) ..."
-    if ($PinWatch) { & $py $watchpy @expectArgs --pin }
-    else           { & $py $watchpy @expectArgs }
+    if ($PinWatch) { & $py @pyPre $watchpy @expectArgs --pin }
+    else           { & $py @pyPre $watchpy @expectArgs }
 } else {
     Write-Host "[defense] static entries in place. Verify with: .\static_arp.ps1 show"
-    Write-Host "[defense] to also monitor: $py $watchpy $($expectArgs -join ' ')"
+    Write-Host "[defense] to also monitor: $py $($pyPre -join ' ') $watchpy $($expectArgs -join ' ')"
 }
