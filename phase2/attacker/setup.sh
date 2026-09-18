@@ -21,9 +21,17 @@ fi
 
 if command -v apt-get >/dev/null 2>&1; then
     echo "[setup] installing system packages (needs your sudo password) ..."
-    sudo apt-get update
-    sudo apt-get install -y --no-install-recommends \
-        python3 python3-venv python3-pip tcpdump iproute2 iputils-ping net-tools dsniff
+    # apt failures (e.g. a broken third-party repo signature) must NOT abort the
+    # whole setup: the venv/scapy steps below don't need apt. Warn and continue.
+    if ! sudo apt-get update; then
+        echo "[setup] WARNING: 'apt-get update' failed (broken/unsigned repo?)." >&2
+        echo "[setup] continuing anyway; will still try to install packages." >&2
+    fi
+    if ! sudo apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip tcpdump iproute2 iputils-ping net-tools dsniff; then
+        echo "[setup] WARNING: package install failed. If arpspoof/scapy are" >&2
+        echo "[setup] missing later, fix apt and re-run. Continuing to venv." >&2
+    fi
 else
     echo "[setup] non-apt system: install python3, python3-venv, tcpdump, iproute2"
     echo "[setup] with your package manager, then re-run this script."
