@@ -307,11 +307,15 @@ On the three-machine Wi-Fi test-bed the attack behaved as predicted.
         (Figure~\ref{fig:mitm}).
   \item \textbf{Teardown observed.} The client printed the RST banner (``reset
         with NO preceding FIN'') and then \textbf{PLAYBACK STALLED} once the
-        buffer drained (Figure~\ref{fig:stall}); the \code{ESTABLISHED} entry
-        disappeared from the client's connection table
-        (Figure~\ref{fig:ss}).
-  \item \textbf{On the wire.} The capture showed a run of DATA segments followed
-        by RST(s) with \textbf{no FIN} (Figure~\ref{fig:wireshark}).
+        buffer drained (Figure~\ref{fig:stall}).
+  \item \textbf{Connection table cleared.} On the Windows victim,
+        \code{netstat -ano | findstr :9000} listed the four-tuple on port~9000
+        \emph{while} streaming and showed \textbf{nothing after the reset} —
+        confirming (per proposal~\S5) that the socket was destroyed, not merely
+        idle.
+  \item \textbf{On the wire.} The attacker-side capture showed the injected
+        \textbf{RST flood in both directions with no FIN} anywhere
+        (Figure~\ref{fig:wireshark}).
 \end{itemize}
 
 \begin{figure}[h]
@@ -332,21 +336,25 @@ drains, playback stalls.}
 \label{fig:stall}
 \end{figure}
 
-\begin{figure}[h]
-\ssplaceholder{\code{ss -tan | grep 9000} (Linux) or \code{netstat -ano | findstr
-:9000} (Windows) on the client, BEFORE (ESTABLISHED) and AFTER (gone) the
-attack.}{images/fig_ss_gone.png}
-\caption{The connection table on the client before vs.\ after: the
-\code{ESTABLISHED} entry vanishes — hard proof the socket was destroyed.}
-\label{fig:ss}
-\end{figure}
+% (Optional) A before/after netstat/ss screenshot could go here, but the
+% connection-table teardown is reported in prose above (§6) since it was observed
+% live on the Windows victim. To add it, drop an image in images/ and uncomment:
+% \begin{figure}[h]\centering
+%   \includegraphics[width=0.9\linewidth]{fig_ss_gone.png}
+%   \caption{Client connection table before vs.\ after: the ESTABLISHED entry vanishes.}
+%   \label{fig:ss}
+% \end{figure}
 
-\begin{figure}[h]
-\ssplaceholder{Wireshark filtered on \code{tcp.port == 9000}: a run of PSH,ACK
-data segments, then RST segment(s), with NO FIN. Highlight one forged RST whose
-source IP is the server but which actually came from the attacker.}{images/fig_wireshark_rst.png}
-\caption{Packet capture: DATA segments then a forged RST with no preceding
-FIN/FIN-ACK.}
+\begin{figure}[h]\centering
+\includegraphics[width=0.97\linewidth]{fig_wireshark_rst.png}
+\caption{Attacker-side capture (filter \code{tcp.port == 9000}). A sustained flood
+of forged \textbf{RST} segments in \emph{both} directions: \code{9000\,$\to$\,51654}
+carries the \textbf{server's} IP (\code{10.169.169.216}) as source, and
+\code{51654\,$\to$\,9000} carries the \textbf{client's} IP — yet both were sent by
+the attacker. The sequence values (\code{Seq=1/1461/1462}, and \code{4294965838}
+= $-1$~MSS relative) are the $\pm$1~MSS burst around \code{RCV.NXT}, all
+\code{Win=0}, \code{Len=0}. Crucially there is \textbf{no FIN/FIN-ACK} anywhere —
+the RFC~5961 exact-match burst strategy tearing the connection down abruptly.}
 \label{fig:wireshark}
 \end{figure}
 
