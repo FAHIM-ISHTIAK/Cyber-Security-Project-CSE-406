@@ -128,21 +128,28 @@ attack cannot work until preflight passes.
 - **Windows:** `powershell -ExecutionPolicy Bypass -File phase2\server\run_server.ps1`
 - **Linux/macOS:** `phase2/server/run_server.sh`
 
-It prints its LAN IP (that's **SERVER_IP**) and streams the video at
-`phase2/media/sample.mp4` if present (put your own video there, or set
-`MEDIA=/path/to/video.mp4`); otherwise it auto-generates a 120s clip with ffmpeg
-(or an ~8 MB synthetic placeholder if ffmpeg is missing — works for the attack
-but not playable). If the client cannot connect, allow inbound TCP 9000 through
-the server's firewall (the launcher prints the exact command).
+It prints its LAN IP (that's **SERVER_IP**) and **streams MPEG-TS**: it takes your
+source video (`phase2/media/sample.mp4` by default, or `MEDIA=/path/to/video`,
+or the file named in the launcher) and auto-converts it to `stream.ts`; if no
+source exists it generates a 120s `.ts` clip (or a non-playable placeholder if
+ffmpeg is missing). TS is used so the client can play progressively and a
+truncated copy still plays up to the RST cut. If the client cannot connect, allow
+inbound TCP 9000 through the server's firewall (the launcher prints the command).
 
 ### PC 2 — Client / victim (start second)
 - **Windows:** `powershell -ExecutionPolicy Bypass -File phase2\client\run_client.ps1 <SERVER_IP>`
 - **Linux/macOS:** `phase2/client/run_client.sh <SERVER_IP>`
 
-You should see a healthy stream: buffer grows, playback advances, e.g.
+If the client machine has **`ffplay` or `mpv`**, a real player window opens and
+plays the stream live; it also saves `output/received.ts` and remuxes
+`output/received.mp4` at the end. Without a player it falls back to download +
+on-screen simulation. Control with `PLAYER=ffplay|mpv|none` (default `auto`). You
+should see a healthy stream: buffer grows, playback advances, e.g.
 ```
 [client] t= 12.0s  recv 1.60/7.5 MB (21%)  net  512 KB/s  buffer  4.2s  play  9.0/120s
 ```
+When the RST lands, the player keeps playing its buffer then **freezes** — the
+attack made visible.
 
 ### PC 3 — Attacker (start third, in the Linux VM)
 Optionally capture first, in a second VM shell:

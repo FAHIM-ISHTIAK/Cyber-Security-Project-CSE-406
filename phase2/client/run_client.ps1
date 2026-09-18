@@ -20,11 +20,23 @@ if (-not $ServerIp) { Write-Error "usage: .\run_client.ps1 <server_ip>  (or set 
 if (-not (Test-Path $ClientPy)) { Write-Error "$ClientPy not found (copy the whole repo to this machine)"; exit 1 }
 
 $Port    = if ($env:SERVER_PORT) { $env:SERVER_PORT } else { "9000" }
-$OutFile = if ($env:OUTFILE) { $env:OUTFILE } else { Join-Path $OutDir "received.mp4" }
+# The server streams MPEG-TS, so save as .ts (a truncated .ts still plays).
+$OutFile = if ($env:OUTFILE) { $env:OUTFILE } else { Join-Path $OutDir "received.ts" }
+$Player  = if ($env:PLAYER) { $env:PLAYER } else { "auto" }   # auto | ffplay | mpv | none
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
-Write-Host "[client] connecting to ${ServerIp}:$Port, saving to $OutFile"
+Write-Host "[client] connecting to ${ServerIp}:$Port, saving to $OutFile (player=$Player)"
 $env:SERVER_IP = $ServerIp
 $env:SERVER_PORT = $Port
 $env:OUTFILE = $OutFile
+$env:PLAYER = $Player
 python "$ClientPy"
+
+# Also produce a playable .mp4 from the saved .ts (works even if truncated).
+if ($OutFile -like "*.ts" -and (Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0) -and (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    $Mp4 = [System.IO.Path]::ChangeExtension($OutFile, ".mp4")
+    Write-Host "[client] remuxing $OutFile -> $Mp4 ..."
+    ffmpeg -y -hide_banner -loglevel error -i "$OutFile" -c copy "$Mp4" 2>$null
+    if ($LASTEXITCODE -ne 0) { ffmpeg -y -hide_banner -loglevel error -i "$OutFile" -c:v libx264 -c:a aac "$Mp4" 2>$null }
+    if ($LASTEXITCODE -ne 0) { Write-Host "[client] (could not make .mp4; the .ts still plays)" }
+}
