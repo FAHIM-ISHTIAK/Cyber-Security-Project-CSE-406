@@ -55,14 +55,34 @@ case "$MYIP" in
 esac
 
 echo "== Reachability & MAC resolution (needs client isolation OFF on the AP) =="
+# Resolve a host's MAC via ARP (scapy). This is what the ATTACK actually uses,
+# and it works even when the host blocks ICMP/ping (e.g. Windows Firewall).
+arp_mac() {
+    "$VENV_PY" - "$1" "$IFACE" <<'PY' 2>/dev/null
+import sys
+from scapy.all import arping
+ip, iface = sys.argv[1], sys.argv[2]
+ans, _ = arping(ip, iface=iface, timeout=2, verbose=0)
+for _, r in ans:
+    print(r.hwsrc); break
+PY
+}
 for pair in "server $SERVER" "client $CLIENT"; do
     role="${pair%% *}"; ip="${pair##* }"
     if ping -c1 -W2 -I "$IFACE" "$ip" >/dev/null 2>&1; then
         mac="$(ip neigh show "$ip" dev "$IFACE" | awk '{print $3}' | head -n1)"
-        if [ -n "$mac" ]; then note OK "$role $ip reachable, mac=$mac"; else note "!!" "$role $ip pings but no MAC learned"; fi
+        [ -n "$mac" ] || mac="$(arp_mac "$ip")"
+        note OK "$role $ip reachable (ping), mac=${mac:-?}"
     else
-        note "!!" "$role $ip UNREACHABLE. On Wi-Fi this usually means AP CLIENT ISOLATION is ON (or wrong IP). Disable AP/client isolation on the router, or use a test router/travel AP you control."
-        fail=1
+        # Ping failed — try ARP. If the MAC resolves, the host IS on-segment and
+        # the attack will work; ping was just filtered (common on a Windows host).
+        mac="$(arp_mac "$ip")"
+        if [ -n "$mac" ]; then
+            note OK "$role $ip reachable via ARP, mac=$mac (ICMP/ping filtered — e.g. Windows Firewall; the attack still works)"
+        else
+            note "!!" "$role $ip UNREACHABLE by ping AND ARP. Likely AP CLIENT ISOLATION is ON, or wrong IP. Disable AP/client isolation, or use a test router/AP you control."
+            fail=1
+        fi
     fi
 done
 
