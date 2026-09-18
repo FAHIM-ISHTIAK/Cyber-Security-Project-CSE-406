@@ -1,0 +1,5 @@
+# Keep shell scripts and Python LF so they run on Linux/macOS even when the repo
+# is edited or checked out on Windows (CRLF breaks bash: "bad interpreter ^M").
+*.sh   text eol=lf
+*.py   text eol=lf
+*.ps1  text eol=crlf
