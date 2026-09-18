@@ -83,7 +83,7 @@
     \textbf{Group:} & 03, Section A1\\[4pt]
     \textbf{Members:} & 2105004 — Fahim Ishtiak\\
                       & 2105001 — Nahid Hossain Redom\\[4pt]
-    \textbf{Date:} & \FILL{submission date}\\
+    \textbf{Date:} & September 19, 2026\\
   \end{tabular}
 \end{center}
 \vspace{6pt}
@@ -152,13 +152,13 @@ traffic was ever touched.
 \begin{table}[h]\centering
 \begin{tabular}{@{}llll@{}}
 \toprule
-\textbf{Machine} & \textbf{Role} & \textbf{OS} & \textbf{Address (fill in)}\\
+\textbf{Machine} & \textbf{Role} & \textbf{OS} & \textbf{Address}\\
 \midrule
-PC~1 & Video server (victim) & \FILL{Windows/Linux ver.} & IP \FILL{server IP}, MAC \FILL{server MAC}\\
-PC~2 & Client / player (victim) & \FILL{Windows/Linux ver.} & IP \FILL{client IP}, MAC \FILL{client MAC}\\
-PC~3 & Attacker & Linux (\FILL{distro/ver.}) & IP \FILL{attacker IP}, MAC \FILL{attacker MAC}\\
+PC~1 & Video server (victim) & Windows/Ubuntu & IP 10.169.169.216, MAC 98:59:7a:cb:16:8c\\
+PC~2 & Client / player (victim) & Windows & IP 10.169.169.114, MAC 90:e8:68:4a:a3:a5\\
+PC~3 & Attacker & Linux mint & IP 10.169.169.133, MAC dc:21:5c:82:1e:8c\\
 \midrule
-\multicolumn{4}{@{}l}{Link layer: Wi-Fi access point / router \FILL{make/model}, subnet \FILL{e.g.\ 192.168.x.0/24}}\\
+\multicolumn{4}{@{}l}{Link layer: Wi-Fi access point - Mobile Hotspot, subnet 10.169.169.0/24}\\
 \bottomrule
 \end{tabular}
 \caption{Physical test-bed for the demonstration. One victim was Windows and one
@@ -204,8 +204,7 @@ Section~\ref{sec:defense}.
 
 The attack has two stages: get on-path (ARP poisoning), then read-and-inject
 (sniff sequence numbers, forge the RST). Figure~\ref{fig:topo} shows the
-topology and Figure~\ref{fig:timeline}/Section~\ref{sec:attack-steps} the
-timeline.
+topology; Section~\ref{sec:attack-steps} walks through the timeline.
 
 \subsection{Topology}
 \begin{figure}[h]\centering
@@ -269,11 +268,15 @@ the LAN interface, starts poisoning, waits for the MITM to settle, then launches
 the injector; Ctrl+C stops it and restores ARP (see
 Section~\ref{sec:obs-impl} for a robustness fix made here).
 
-\begin{figure}[h]
-\ssplaceholder{Attacker terminal: \code{run_attack.sh} output showing ``locked
-onto connection \dots'' and the ``RSTs sent='' hammer counter.}{images/fig_attacker_rst.png}
-\caption{The injector locking onto the victim connection and hammering forged
-RSTs. Record the \code{RSTs sent=} value at teardown for Table~\ref{tab:metrics}.}
+\begin{figure}[h]\centering
+\includegraphics[width=0.95\linewidth]{fig_attacker_rst.png}
+\caption{Attacker driver (\code{run_attack.sh}). It resolves the victims' real
+MACs, enables IP forwarding, poisons both caches, then locks onto
+\code{10.169.169.114:57197 <-> 10.169.169.216:9000} and hammers forged RSTs. The
+tracked \code{cli_rcv_nxt}/\code{srv_frontier} are already \emph{frozen} at the
+first report (\code{RSTs sent=6}) — the stream reset almost immediately — after
+which sustained mode keeps hammering (to \code{RSTs sent=744}) until Ctrl+C
+cleanly restores ARP.}
 \label{fig:attacker}
 \end{figure}
 
@@ -301,16 +304,18 @@ From the design proposal (Section~5), a successful attack should produce:
 On the three-machine Wi-Fi test-bed the attack behaved as predicted.
 
 \begin{itemize}[leftmargin=1.4em,itemsep=2pt]
-  \item \textbf{Clean MITM confirmed.} After poisoning, the victims' ARP tables
-        showed the peer IP mapped to the \emph{attacker's} MAC, and the stream
-        kept playing normally while transiting the attacker
-        (Figure~\ref{fig:mitm}).
+  \item \textbf{Clean MITM confirmed.} The attacker resolved both victims' real
+        MACs and enabled IP forwarding (Figure~\ref{fig:attacker}); the stream
+        then played normally while transiting the attacker — playback started
+        after the 3\,s prebuffer and advanced with a healthy buffer
+        (Figure~\ref{fig:mitm}) — a clean MITM, not a DoS.
   \item \textbf{Teardown observed.} The client printed the RST banner (``reset
-        with NO preceding FIN'') and then \textbf{PLAYBACK STALLED} once the
-        buffer drained (Figure~\ref{fig:stall}).
+        with NO preceding FIN''), the download froze at \code{30.4\%}
+        (\code{1.74/5.70 MB}), and it reported \textbf{PLAYBACK STALLED}
+        (Figure~\ref{fig:stall}).
   \item \textbf{Connection table cleared.} On the Windows victim,
         \code{netstat -ano | findstr :9000} listed the four-tuple on port~9000
-        \emph{while} streaming and showed \textbf{nothing after the reset} —
+        \emph{while} streaming and showed \textbf{nothing after the reset} ---
         confirming (per proposal~\S5) that the socket was destroyed, not merely
         idle.
   \item \textbf{On the wire.} The attacker-side capture showed the injected
@@ -318,21 +323,24 @@ On the three-machine Wi-Fi test-bed the attack behaved as predicted.
         (Figure~\ref{fig:wireshark}).
 \end{itemize}
 
-\begin{figure}[h]
-\ssplaceholder{Client status lines advancing normally (buffer/playback growing)
-\emph{while} the attacker is MITM — proving a clean MITM, not a DoS. Optionally
-also show \code{ip neigh}/\code{arp -a} on a victim with the peer IP $\to$
-attacker MAC.}{images/fig_mitm_healthy.png}
-\caption{Healthy stream under an active MITM (before the RST), plus a poisoned ARP
-entry on a victim.}
+\begin{figure}[h]\centering
+\includegraphics[width=0.95\linewidth]{fig_mitm_healthy.jpg}
+\caption{Victim client during the attack (Windows, \code{run_client.ps1}). While
+relayed through the attacker the stream plays normally — playback starts after the
+3\,s prebuffer and advances with a healthy buffer (a \emph{clean} MITM, not a
+DoS) — until the download halts at \code{1.74/5.70 MB (30.4\%)} around
+\code{t=16.7s} as the injected RST freezes the server; playback then coasts on the
+drained buffer until it stalls (Figure~\ref{fig:stall}).}
 \label{fig:mitm}
 \end{figure}
 
-\begin{figure}[h]
-\ssplaceholder{Client terminal: the ``TCP CONNECTION RESET (RST) received''
-banner followed by ``PLAYBACK STALLED''.}{images/fig_client_stall.png}
-\caption{The victim experiencing the outage: abrupt reset (no FIN), buffer
-drains, playback stalls.}
+\begin{figure}[h]\centering
+\includegraphics[width=0.95\linewidth]{fig_client_stall.jpg}
+\caption{The victim experiencing the outage. The client reports ``TCP CONNECTION
+RESET (RST) received --- \dots reset with NO preceding FIN'', the ffmpeg player
+throws corrupt-packet / buffer-exhausted errors, and it prints \textbf{PLAYBACK
+STALLED} having received only \code{1.74/5.70 MB} before the reset --- an abrupt,
+FIN-less teardown, exactly the attack's intended effect.}
 \label{fig:stall}
 \end{figure}
 
@@ -360,19 +368,21 @@ the RFC~5961 exact-match burst strategy tearing the connection down abruptly.}
 
 \subsection{Measured results}
 \begin{table}[h]\centering
-\begin{tabular}{@{}p{4.6cm}p{5.2cm}p{4.4cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{4.4cm}p{6.3cm}@{}}
 \toprule
-\textbf{Metric} & \textbf{How measured} & \textbf{Result (fill in)}\\
+\textbf{Metric} & \textbf{How measured} & \textbf{Result}\\
 \midrule
-Attack success rate (\%) & successful resets over $N$ trials & \FILL{e.g.\ 10/10 = 100\%}\\
-Time-to-disruption & attack trigger $\to$ player stall & \FILL{e.g.\ $\sim$X s}\\
-RST attempts per success & injector \code{RSTs sent=} at teardown & \FILL{e.g.\ $\sim$X}\\
-Behavior vs.\ client retry & \code{RECONNECT=1}: recovers on its own? & \FILL{needs sustained injection}\\
-Success with vs.\ without defense & rerun with static ARP pinned & \FILL{without: succeeds; with: fails}\\
+Attack success rate & successful resets over repeated trials & 100\% --- succeeded on every attempt\\[2pt]
+Time-to-disruption & injector lock-on $\to$ stream frozen & $<1$\,s: the tracked sequence values were already static at the first report; the client's playback stalled within a few seconds\\[2pt]
+RST attempts per success & injector \code{RSTs sent=} counter at teardown & Reset landed by the first report (\code{RSTs sent=6}); sustained mode then continued to \code{744} by design\\[2pt]
+Behavior vs.\ client retry & default client vs.\ \code{RECONNECT=1} & Default client stalled and stopped (no retry); sustained hammering is what keeps a reconnecting client down\\[2pt]
+Success with vs.\ without defense & rerun with static ARP pinned on both victims & Without defense: reset every time. With defense: attack fails (\S\ref{sec:defense})\\
 \bottomrule
 \end{tabular}
-\caption{Measured results (design proposal Table~2). Repeat each run a few times
-and record the numbers.}
+\caption{Measured results on the three-machine Wi-Fi test-bed (design proposal
+Table~2). The attack succeeded on every run; exact per-run RST counts were not
+tallied, but the injector's live counter and the frozen sniffer state
+(Figure~\ref{fig:attacker}) show the reset landing near-instantly.}
 \label{tab:metrics}
 \end{table}
 
@@ -383,16 +393,15 @@ The \emph{logical} attack matched the proposal exactly; the differences are in
 deployment and implementation, and all are documented here rather than hidden.
 
 \begin{enumerate}[leftmargin=1.4em,itemsep=4pt]
-  \item \textbf{Docker Phase~1 was not used; we demonstrated directly on three
-        physical machines.} The proposal planned a single-host Docker simulation
-        (Phase~1) before the physical demo (Phase~2). In practice we could not
-        get the Docker-based setup working for our demonstration
-        \FILL{state the concrete reason, e.g.\ Docker Desktop/WSL2 networking
-        issues on the demo laptop}, so we conducted the \emph{entire} attack and
-        defense on three real machines. \emph{Impact:} none on the result — the
-        physical demo is the stronger evidence anyway (it proves the attack is
-        not an artifact of the Docker virtual network stack), which was the whole
-        purpose of Phase~2.
+  \item \textbf{Docker Phase~1 was built but is not reported here; the results
+        come from three physical machines.} The proposal planned a single-host
+        Docker simulation (Phase~1) before the physical demo (Phase~2). We did
+        build and run the Docker-based setup, but could not get it working across
+        three separate machines, so we conducted the \emph{entire} reported attack
+        and defense on three real machines without Docker. \emph{Impact:} none on
+        the findings --- the physical demonstration is the stronger evidence,
+        since it proves the attack is not an artifact of the Docker virtual
+        network stack, which was the whole purpose of Phase~2.
   \item \textbf{The attacker ran natively on a physical Linux host, not in a
         VM/container.} Because there was no Docker/VM layer, the Wi-Fi + VM
         ``bridged networking'' pitfalls anticipated for a virtualized attacker
@@ -436,11 +445,13 @@ equivalent, Dynamic ARP Inspection, was unavailable on our consumer AP):
         as a permanent entry so forged ARP replies are ignored.
         Cross-platform: \code{static_arp.sh} (Linux/macOS) and
         \code{static_arp.ps1} (Windows).
-  \item \textbf{ARP monitoring (detection).} \code{arp_watch.py} (pure standard
-        library, runs on any victim) polls the neighbour table and alerts on a
-        watched IP's MAC changing, or on one MAC claiming several IPs (the MITM
-        signature); it can optionally re-pin automatically. This is the host-side
-        stand-in for DAI.
+  \item \textbf{ARP monitoring (detection).} \code{arp_watch.py} runs on a victim
+        and raises an alert on an ARP-poisoning attempt. On Linux (\code{--sniff})
+        it reads ARP frames directly off the wire, so it flags the forged reply
+        \emph{even while the static pin silently blocks it} (a pinned host's ARP
+        table never changes, so table polling alone would see nothing); without
+        \code{--sniff} it polls the neighbour table for a changed binding. It can
+        optionally re-pin automatically. This is the host-side stand-in for DAI.
   \item \textbf{One-command driver.} \code{defend.sh}/\code{defend.ps1} pins the
         peer (and gateway) and starts the monitor; a \code{--off}/\code{-Off}
         switch removes the entries again, so the defense can be toggled

@@ -22,11 +22,20 @@ correct MAC (from a baseline or --expect), re-apply the correct static entry to
 heal the cache automatically. This turns the monitor into a self-healing defense
 for IPs you did not permanently pin. (Needs Admin/root; shells out to the OS.)
 
+IMPORTANT — detecting the attack WHILE a static pin blocks it. Table polling
+cannot see the attack once you have pinned a static ARP entry, because the OS
+table then never changes (the forged replies are ignored before they reach it).
+For that case use `--sniff` (Linux, root): it reads ARP frames straight off the
+wire and flags a forged reply even while the pin silently blocks it. `defend.sh`
+turns this on automatically.
+
 Usage:
   # Watch the server (and gateway); learn their real MACs at startup as baseline:
   python3 arp_watch.py --watch 192.168.1.10 --watch 192.168.1.1
   # Pin the expected MAC explicitly (most trustworthy — read it on the peer):
   python3 arp_watch.py --expect 192.168.1.10=aa:bb:cc:dd:ee:ff
+  # SEE the attack even while statically pinned (Linux, root) — wire detection:
+  sudo python3 arp_watch.py --expect 192.168.1.10=aa:bb:cc:dd:ee:ff --sniff
   # Detect AND auto-heal (root/Admin):
   sudo python3 arp_watch.py --watch 192.168.1.10 --pin
 """
@@ -34,6 +43,8 @@ import argparse
 import os
 import platform
 import re
+import socket
+import struct
 import subprocess
 import sys
 import time
@@ -130,6 +141,104 @@ def alert(msg: str, logf) -> None:
         logf.write(line + "\n"); logf.flush()
 
 
+ETH_P_ARP = 0x0806
+
+
+def sniff_wire(watch_ips, good_map, iface, logf, do_pin) -> bool:
+    """Detect forged ARP on the WIRE (Linux, root).
+
+    Table polling (the default loop below) cannot see the attack once a static
+    pin is in place, because the OS neighbour table never changes — the forged
+    replies are ignored before they reach it. This mode instead reads incoming
+    ARP frames straight off the NIC, so it flags a forged reply that claims a
+    watched IP with the wrong MAC EVEN WHILE the static pin silently blocks it.
+
+    Returns False (so the caller falls back to table polling) if it can't run
+    here (non-Linux, no root, or nothing with a known-good MAC). Otherwise it
+    blocks until Ctrl+C.
+    """
+    if not IS_LINUX or not hasattr(socket, "AF_PACKET"):
+        print("[watch] --sniff (wire detection) needs Linux. On Windows/macOS the "
+              "static pin still BLOCKS the attack, but silently; run the monitor on "
+              "the Linux victim to SEE the detection. Falling back to table polling.",
+              flush=True)
+        return False
+    watchset = {ip for ip in watch_ips if good_map.get(ip)}
+    if not watchset:
+        print("[watch] --sniff: no watched IP has a known-good MAC to compare against; "
+              "falling back to table polling.", flush=True)
+        return False
+    try:
+        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ARP))
+        if iface:
+            s.bind((iface, socket.htons(ETH_P_ARP)))
+    except PermissionError:
+        print("[watch] --sniff needs root (raw socket). Re-run with sudo. "
+              "Falling back to table polling.", flush=True)
+        return False
+    except OSError as e:
+        print(f"[watch] --sniff could not open a raw socket ({e}); "
+              f"falling back to table polling.", flush=True)
+        return False
+    s.settimeout(1.0)
+
+    print(f"[watch] WIRE-SNIFF active on {iface or 'all interfaces'} — detects forged "
+          f"ARP even while statically pinned. Watching {sorted(watchset)}. (Ctrl+C to stop)",
+          flush=True)
+
+    total = 0
+    under_attack = False
+    last_summary = 0.0
+    last_seen = 0.0
+    healthy_since = time.time()
+    try:
+        while True:
+            try:
+                frame = s.recv(2048)
+            except socket.timeout:
+                frame = b""
+            now = time.time()
+            if len(frame) >= 42:                       # 14 B Ethernet + 28 B ARP
+                arp = frame[14:42]
+                sender_mac = ":".join("%02x" % b for b in arp[8:14])
+                sender_ip = socket.inet_ntoa(arp[14:18])
+                good = good_map.get(sender_ip, "")
+                if good and sender_ip in watchset and sender_mac != good:
+                    total += 1
+                    last_seen = now
+                    if not under_attack:
+                        under_attack = True
+                        last_summary = now
+                        alert(f"ARP POISONING DETECTED on the wire: {sender_ip} falsely "
+                              f"advertised as {sender_mac} (real {good}). If this IP is "
+                              f"pinned here the forged reply is ignored (attack blocked).",
+                              logf)
+                        if do_pin:
+                            repin(sender_ip, good)
+                    elif now - last_summary >= 3.0:
+                        print(f"[watch] {ts()}  ongoing attack: {total} forged ARP replies "
+                              f"seen ({sender_ip} claimed as {sender_mac}; real {good}).",
+                              flush=True)
+                        last_summary = now
+            if under_attack and now - last_seen > 6.0:
+                under_attack = False
+                print(f"[watch] {ts()}  attack appears to have stopped "
+                      f"({total} forged replies total). Still watching.", flush=True)
+                healthy_since = now
+            elif not under_attack and now - healthy_since > 15.0:
+                print(f"[watch] {ts()}  OK — no forged ARP on the wire; "
+                      f"watching {sorted(watchset)}.", flush=True)
+                healthy_since = now
+    except KeyboardInterrupt:
+        print(f"\n[watch] stopped. {total} forged ARP replies detected in total.", flush=True)
+    finally:
+        try:
+            s.close()
+        except OSError:
+            pass
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="ARP-poisoning detector / monitor")
     ap.add_argument("--watch", action="append", default=[], metavar="IP",
@@ -139,6 +248,10 @@ def main() -> int:
     ap.add_argument("--interval", type=float, default=1.0, help="poll seconds (default 1)")
     ap.add_argument("--pin", action="store_true",
                     help="auto-heal: re-apply the correct static entry on poisoning (root/Admin)")
+    ap.add_argument("--sniff", action="store_true",
+                    help="detect forged ARP on the WIRE (Linux, root) — catches the attack "
+                         "even while a static pin silently blocks it (table polling cannot)")
+    ap.add_argument("--iface", default="", help="interface for --sniff (default: all)")
     ap.add_argument("--log", default="", help="also append alerts to this file")
     args = ap.parse_args()
 
@@ -174,6 +287,15 @@ def main() -> int:
             print(f"[watch] baseline {ip} -> {mac} ({src})", flush=True)
         else:
             print(f"[watch] baseline {ip} -> (unresolved; will learn when it appears)", flush=True)
+
+    # Wire-sniff mode: the only way to SEE the attack while a static pin blocks it
+    # (the OS table never changes, so table polling below would report "no
+    # poisoning"). Falls through to table polling if it can't run here.
+    if args.sniff:
+        if sniff_wire(watch_ips, baseline, args.iface, logf, args.pin):
+            if logf:
+                logf.close()
+            return 0
 
     print("[watch] monitoring ... (Ctrl+C to stop)", flush=True)
     healthy_since = time.time()

@@ -76,14 +76,21 @@ echo "[defense] === protecting this host: peer=$PEER ${GATEWAY:+gateway=$GATEWAY
 pin_one "$PEER" "$PEER_MAC"
 [ -n "$GATEWAY" ] && pin_one "$GATEWAY"
 
+# Wire-sniff detection: the ONLY way to SEE the attack while the static pin blocks
+# it (the OS ARP table never changes when pinned, so table polling stays silent).
+# Bind it to the interface that reaches the peer.
+IFACE="$(ip -o route get "$PEER" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')"
+SNIFF_ARGS=(--sniff)
+[ -n "$IFACE" ] && SNIFF_ARGS+=(--iface "$IFACE")
+
 if [ "$DO_WATCH" -eq 1 ]; then
-    echo "[defense] starting ARP monitor (Ctrl+C to stop) ..."
+    echo "[defense] starting ARP monitor (wire-sniff${IFACE:+ on $IFACE}; Ctrl+C to stop) ..."
     if [ "$PIN_WATCH" -eq 1 ]; then
-        exec "$PY" "$WATCH" "${EXPECT_ARGS[@]}" --pin
+        exec "$PY" "$WATCH" "${EXPECT_ARGS[@]}" "${SNIFF_ARGS[@]}" --pin
     else
-        exec "$PY" "$WATCH" "${EXPECT_ARGS[@]}"
+        exec "$PY" "$WATCH" "${EXPECT_ARGS[@]}" "${SNIFF_ARGS[@]}"
     fi
 else
     echo "[defense] static entries in place. Verify with: bash $STATIC show"
-    echo "[defense] to also monitor: sudo $PY $WATCH ${EXPECT_ARGS[*]}"
+    echo "[defense] to also monitor (see attacks while pinned): sudo $PY $WATCH ${EXPECT_ARGS[*]} ${SNIFF_ARGS[*]}"
 fi

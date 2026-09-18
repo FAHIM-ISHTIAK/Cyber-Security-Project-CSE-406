@@ -37,7 +37,7 @@ position this specific attack depends on. In our three-machine setup the
 |------|---------|---------|
 | `static_arp.sh` | Linux / macOS victim | pin / unpin / show / verify a static IP→MAC entry (§6.2 prevent) |
 | `static_arp.ps1` | Windows victim (Admin) | same, via `netsh` / `New-NetNeighbor` |
-| `arp_watch.py` | any victim (stdlib, no deps) | **detect** ARP poisoning live (MAC change or one-MAC-many-IPs); optional auto-heal |
+| `arp_watch.py` | any victim (stdlib, no deps) | **detect** ARP poisoning live; `--sniff` (Linux, root) sees forged ARP **even while a static pin blocks it**; optional auto-heal |
 | `defend.sh` | Linux / macOS victim | one-shot: pin the peer (+gateway) **and** start the monitor |
 | `defend.ps1` | Windows victim (Admin) | same, for Windows |
 | `rfc5961_check.sh` | Linux victim | verify / explain the RFC 5961 TCP-layer defense (§6.1) |
@@ -45,6 +45,18 @@ position this specific attack depends on. In our three-machine setup the
 The "peer" is **the other endpoint of the video flow**: on the **client** the peer
 is the **server**; on the **server** the peer is the **client**. Pinning the
 **gateway** too is good practice.
+
+### Seeing the attack while the pin is blocking it (`--sniff`)
+
+A static pin makes the OS ARP table **stop changing**, so a table-polling monitor
+correctly reports "no poisoning" even while the attacker is hammering forged ARP
+replies — the pin ignores them before they reach the table. To actually **see**
+the attempt, `arp_watch.py --sniff` (Linux, root) reads ARP frames straight off
+the wire and alerts the moment a watched IP is advertised with the wrong MAC,
+even though the pin is silently dropping it. `defend.sh` enables `--sniff`
+automatically, so `--watch`/`--pin-watch` now **block *and* detect** on a Linux
+victim. (On Windows/macOS the pin still blocks, but silently; run the detection
+on the Linux victim — see below.)
 
 ### Run it on BOTH victims (why one side isn't enough)
 
