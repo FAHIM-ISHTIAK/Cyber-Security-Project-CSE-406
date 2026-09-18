@@ -11,16 +11,26 @@ demo shows the exact behaviour the design proposal predicts:
                     from the buffer, then STALLS once the buffer drains and
                     the "player" reports a network/connection error.
 
+Optionally it can ALSO feed the live stream into a real media player (ffplay or
+mpv) so you watch genuine progressive playback that stalls the instant the RST
+cuts the connection. This works best when the server sends a streamable
+container (MPEG-TS); see phase2/server. If no player is found it silently falls
+back to the download+simulation behaviour above (so Phase 1 / Docker is
+unaffected).
+
 Environment:
   SERVER_IP, SERVER_PORT   where to connect (default 172.20.0.10:9000)
   OUTFILE                  where to save the stream (default /out/received.mp4)
   PREBUFFER_SECONDS        buffer to build before playback starts (default 3)
   RECONNECT                "1" to auto-retry after a reset (default "0")
   RECONNECT_DELAY          seconds between retries (default 3)
+  PLAYER                   live player: auto (default) | ffplay | mpv | none
 """
 import os
+import shutil
 import socket
 import struct
+import subprocess
 import sys
 import time
 
@@ -40,6 +50,7 @@ OUTFILE = os.environ.get("OUTFILE", "/out/received.mp4")
 PREBUFFER = float(os.environ.get("PREBUFFER_SECONDS", "3"))
 RECONNECT = os.environ.get("RECONNECT", "0") == "1"
 RECONNECT_DELAY = float(os.environ.get("RECONNECT_DELAY", "3"))
+PLAYER = os.environ.get("PLAYER", "auto").lower()
 
 MAGIC = b"VSTR"
 HEADER_LEN = 4 + 8 + 8
@@ -57,6 +68,65 @@ def recv_exact(sock: socket.socket, n: int) -> bytes:
 
 def human_mb(b: int) -> str:
     return f"{b / 1_048_576:.2f}"
+
+
+def find_player_exe(name: str):
+    """Locate ffplay/mpv even if it is not on PATH yet.
+
+    Right after `winget install ffmpeg`, an already-open shell has a stale PATH,
+    so shutil.which() misses it. Fall back to the usual Windows install spots.
+    """
+    p = shutil.which(name)
+    if p:
+        return p
+    if os.name == "nt":
+        import glob
+        local = os.environ.get("LOCALAPPDATA", "")
+        progdata = os.environ.get("ProgramData", r"C:\ProgramData")
+        patterns = [
+            os.path.join(local, "Microsoft", "WinGet", "Packages", "*FFmpeg*", "**", name + ".exe"),
+            os.path.join(local, "Microsoft", "WinGet", "Packages", "*" + name + "*", "**", name + ".exe"),
+            os.path.join(local, "Microsoft", "WinGet", "Links", name + ".exe"),
+            os.path.join(progdata, "chocolatey", "bin", name + ".exe"),
+            os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "**", name + ".exe"),
+        ]
+        for pat in patterns:
+            try:
+                hits = glob.glob(pat, recursive=True)
+            except Exception:
+                hits = []
+            if hits:
+                return hits[0]
+    return None
+
+
+def start_player():
+    """Start a real media player reading the stream from stdin (tee mode).
+
+    Returns (Popen, name) or (None, None) if disabled or no player is found.
+    ffplay/mpv both play a streamable container (MPEG-TS) progressively and stop
+    when the pipe ends (i.e. when the RST cuts the stream), which is exactly the
+    behaviour we want to show.
+    """
+    if PLAYER == "none":
+        return None, None
+    order = {"auto": ["ffplay", "mpv"], "ffplay": ["ffplay"], "mpv": ["mpv"]}.get(
+        PLAYER, ["ffplay", "mpv"])
+    argsets = {
+        "ffplay": ["-hide_banner", "-loglevel", "warning", "-autoexit",
+                   "-window_title", "RST demo - victim playback", "-i", "-"],
+        "mpv":    ["--really-quiet", "--force-window=yes",
+                   "--title=RST demo - victim playback", "-"],
+    }
+    for name in order:
+        exe = find_player_exe(name)
+        if exe:
+            try:
+                proc = subprocess.Popen([exe] + argsets[name], stdin=subprocess.PIPE)
+                return proc, name
+            except Exception as e:
+                print(f"[client] could not start {name} ({exe}): {e}", flush=True)
+    return None, None
 
 
 def play_session() -> str:
@@ -92,6 +162,13 @@ def play_session() -> str:
           f"playback ~{play_bitrate/1024:.0f} KB/s", flush=True)
 
     out = open(OUTFILE, "wb")
+    player, player_name = start_player()
+    if player is not None:
+        print(f"[client] >>> live player started ({player_name}); a window will open and "
+              f"play as the stream arrives", flush=True)
+    else:
+        print("[client] (no live player; downloading + simulating playback. "
+              "Set PLAYER=ffplay|mpv or install one to watch live.)", flush=True)
     received = 0
     start = time.time()
     play_start = None       # wall-clock time playback began
@@ -146,6 +223,13 @@ def play_session() -> str:
 
             received += len(data)
             out.write(data)
+            # Tee the live bytes into the real player, if one is running.
+            if player is not None and player.stdin is not None:
+                try:
+                    player.stdin.write(data)
+                except (BrokenPipeError, OSError):
+                    # Viewer closed the player window; stop feeding it.
+                    player = None
 
             if play_start is None and downloaded_s() >= PREBUFFER:
                 play_start = time.time()
@@ -160,10 +244,32 @@ def play_session() -> str:
             sock.close()
         except OSError:
             pass
+        # Signal end-of-stream to the player so it plays out whatever it has
+        # buffered and then stops (this is the visible "buffer drains, then
+        # stall" moment when the RST has cut the feed).
+        if player is not None and player.stdin is not None:
+            try:
+                player.stdin.close()
+            except Exception:
+                pass
+
+    def finish_player() -> None:
+        if player is None:
+            return
+        try:
+            player.wait(timeout=300)
+        except Exception:
+            try:
+                player.terminate()
+            except Exception:
+                pass
 
     # Report how the socket ended.
     if outcome == "complete":
         status("[DONE]")
+        if player is not None:
+            print("[client] (live player is finishing the buffered video ...)", flush=True)
+            finish_player()
         print(f"[client] ✅ stream completed gracefully (FIN). Saved {human_mb(received)} MB "
               f"to {OUTFILE}", flush=True)
         return "complete"
@@ -177,7 +283,13 @@ def play_session() -> str:
         print("[client] stream aborted with an error.", flush=True)
 
     # Drain the playback buffer in real time, then stall.
-    if play_start is not None:
+    if player is not None:
+        # A real player is up: it keeps playing its buffered video and then
+        # halts at the cut — that IS the stall. Wait for it to play out.
+        print("[client] (live player draining its buffer; the window will stall/close "
+              "when it runs dry — that is the attack's effect)", flush=True)
+        finish_player()
+    elif play_start is not None:
         while played_s() < downloaded_s() - 0.05:
             status("[buffering-out]")
             time.sleep(0.5)

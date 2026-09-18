@@ -169,11 +169,15 @@ phase2/server/run_server.sh
 powershell -ExecutionPolicy Bypass -File phase2\server\run_server.ps1
 ```
 
-**Which video gets streamed:** the file at `phase2/media/sample.mp4` if it
-exists (put your own video there, or set `MEDIA=/path/to/video.mp4`); otherwise
-it generates a 120-second test video with `ffmpeg`; if `ffmpeg` isn't installed,
-an ~8 MB **synthetic placeholder** (not playable, but fine for the attack — the
-stream is just bytes).
+**The server streams MPEG-TS** so the client can play it *progressively* (and a
+copy truncated by the RST still plays up to the cut). The launcher takes your
+source video — `phase2/media/sample.mp4` by default, or `MEDIA=/path/to/video`,
+or the file named in the launcher — and **auto-converts it to `stream.ts`** with
+`ffmpeg`. If no source exists it generates a 120s `.ts` test clip; if `ffmpeg`
+isn't installed it falls back to a non-playable placeholder (attack still works).
+Delivery is **auto-paced at the video's real duration** (via ffprobe) so playback
+is smooth without tuning — set `STREAM_SECONDS` only to override (smaller = faster
+= bigger client buffer).
 
 It then serves on `0.0.0.0:9000`. Expected output:
 
@@ -209,19 +213,30 @@ phase2/client/run_client.sh 10.42.0.1
 powershell -ExecutionPolicy Bypass -File phase2\client\run_client.ps1 10.42.0.1
 ```
 
-Expected output — a **healthy** stream, buffer growing, playback advancing:
+If the client machine has **`ffplay` or `mpv`** installed, a **real player window
+opens and plays the video live** as it arrives (that's the point of the MPEG-TS
+stream). The client also saves `phase2/output/received.ts` and, when it ends,
+remuxes a playable `phase2/output/received.mp4`. If no player is installed it
+silently falls back to download + on-screen simulation. Control it with
+`PLAYER=ffplay|mpv|none` (default `auto`).
+
+> The player runs on the **client** machine, so install ffmpeg (gives `ffplay`)
+> or `mpv` there. On Windows: `winget install Gyan.FFmpeg`.
+
+Expected output — a **healthy** stream, a player window playing, buffer growing:
 
 ```
-[client] connecting to 10.42.0.1:9000, saving to .../phase2/output/received.mp4
+[client] connecting to 10.42.0.1:9000, saving to .../phase2/output/received.ts (player=auto)
 [client] connected 10.42.0.137:52344 -> 10.42.0.1:9000
 [client] stream: 7.30 MB, 120.0s video, playback ~62 KB/s
-[client] >>> playback started (prebuffered 3s)
+[client] >>> live player started (ffplay); a window will open and play as the stream arrives
 [client] t= 10.0s  recv 0.66/7.30 MB ( 9.0%)  net   67 KB/s  buffer  3.1s  play  6.9/120s
 [client] t= 15.0s  recv 0.97/7.30 MB (13.3%)  net   66 KB/s  buffer  3.2s  play 11.8/120s
 ```
 
 Let it run for ~15–20 seconds so a buffer builds. This is the moment the
-attacker will strike.
+attacker will strike — and when the RST lands, **the player window keeps playing
+its buffer and then freezes/stops**, exactly like a real stream being cut.
 
 ---
 

@@ -15,7 +15,9 @@ STREAM_SECONDS seconds. Delivering slightly faster than real-time playback
 lets the client build a playback buffer, so that a mid-stream RST produces the
 characteristic "stall once the buffer drains" behaviour described in the spec.
 """
+import glob
 import os
+import shutil
 import socket
 import struct
 import subprocess
@@ -28,7 +30,12 @@ PORT = int(os.environ.get("PORT", "9000"))
 MEDIA = os.environ.get("MEDIA", "/media/sample.mp4")
 CHUNK = int(os.environ.get("CHUNK", "16384"))
 # Deliver the whole file over ~STREAM_SECONDS seconds (network pacing).
-STREAM_SECONDS = float(os.environ.get("STREAM_SECONDS", "90"))
+# STREAM_SECONDS controls how long the whole file takes to deliver (network
+# pacing). If it is unset/blank, the server AUTO-PACES at the video's real
+# duration (probed with ffprobe) so delivery matches real-time playback — no
+# manual tuning. Set STREAM_SECONDS to override (smaller = faster = more buffer).
+_ss_env = os.environ.get("STREAM_SECONDS", "").strip()
+STREAM_SECONDS = float(_ss_env) if _ss_env else None  # None => auto from duration
 
 MAGIC = b"VSTR"
 
@@ -37,12 +44,33 @@ def log(msg: str) -> None:
     print(f"[server] {msg}", flush=True)
 
 
+def find_exe(name: str) -> str:
+    """Locate ffprobe/ffmpeg even if not on PATH yet (stale shell after a winget
+    install). Falls back to the bare name so subprocess can still try PATH."""
+    p = shutil.which(name)
+    if p:
+        return p
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA", "")
+        for pat in (
+            os.path.join(local, "Microsoft", "WinGet", "Packages", "*FFmpeg*", "**", name + ".exe"),
+            os.path.join(local, "Microsoft", "WinGet", "Links", name + ".exe"),
+        ):
+            try:
+                hits = glob.glob(pat, recursive=True)
+            except Exception:
+                hits = []
+            if hits:
+                return hits[0]
+    return name
+
+
 def probe_duration_ms(path: str) -> int:
     """Return media duration in ms via ffprobe, or 0 if unavailable."""
     try:
         out = subprocess.check_output(
             [
-                "ffprobe", "-v", "error",
+                find_exe("ffprobe"), "-v", "error",
                 "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 path,
@@ -98,6 +126,19 @@ def main() -> int:
         return 1
     filesize = os.path.getsize(MEDIA)
     duration_ms = probe_duration_ms(MEDIA)
+
+    # Auto-pace at the real video duration unless STREAM_SECONDS was set.
+    global STREAM_SECONDS
+    if STREAM_SECONDS is None:
+        if duration_ms > 0:
+            STREAM_SECONDS = duration_ms / 1000.0
+            log(f"auto-pacing at the video's real duration ~{STREAM_SECONDS:.0f}s "
+                f"(set STREAM_SECONDS to override)")
+        else:
+            STREAM_SECONDS = 60.0
+            log(f"duration unknown (no ffprobe?); defaulting pace to {STREAM_SECONDS:.0f}s "
+                f"(set STREAM_SECONDS to override)")
+
     if duration_ms == 0:
         # Fallback: assume the network pacing rate equals the playback rate.
         duration_ms = int(STREAM_SECONDS * 1000)

@@ -14,3 +14,7 @@ phase2/output/*.pcap
 
 venv/
 .venv/
+
+# Phase 2 MPEG-TS stream artifacts
+phase2/media/*.ts
+phase2/output/*.ts

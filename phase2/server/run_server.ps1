@@ -15,35 +15,55 @@ $RepoRoot  = (Resolve-Path "$ScriptDir\..\..").Path
 $ServerPy  = Join-Path $RepoRoot "server\stream_server.py"
 $MediaDir  = Join-Path $RepoRoot "phase2\media"
 
-$Port          = if ($env:PORT) { $env:PORT } else { "9000" }
-$StreamSeconds = if ($env:STREAM_SECONDS) { $env:STREAM_SECONDS } else { "120" }
-$Media         = if ($env:MEDIA) { $env:MEDIA } else { Join-Path $MediaDir "Brawl_Stars_x_Duolingo.mp4" }
+$Port = if ($env:PORT) { $env:PORT } else { "9000" }
+# STREAM_SECONDS is intentionally NOT defaulted here: if you leave it unset the
+# server auto-paces at the video's real duration (via ffprobe). Set it to
+# override (e.g. $env:STREAM_SECONDS="30" for a bigger buffer).
 
 if (-not (Test-Path $ServerPy)) { Write-Error "$ServerPy not found (copy the whole repo to this machine)"; exit 1 }
 
-# Use the video at $Media (default: phase2\media\sample.mp4) if it exists;
-# otherwise generate a 120s test-pattern video with ffmpeg. Put your own video
-# at phase2\media\sample.mp4 (or set $env:MEDIA) to stream it.
-if (-not (Test-Path $Media)) {
-    New-Item -ItemType Directory -Force (Split-Path $Media) | Out-Null
-    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-        Write-Host "[server] no media file; generating a 120s test video at $Media ..."
-        ffmpeg -hide_banner -loglevel error `
-            -f lavfi -i "testsrc=size=640x360:rate=25:duration=120" `
-            -f lavfi -i "sine=frequency=1000:duration=120" `
-            -c:v libx264 -preset veryfast -pix_fmt yuv420p `
-            -c:a aac -shortest "$Media"
-    } else {
-        # No ffmpeg: synthetic placeholder so the demo isn't blocked.
-        $Mb = if ($env:MEDIA_MB) { [int]$env:MEDIA_MB } else { 8 }
-        Write-Host "[server] ffmpeg not found; generating a $Mb MB synthetic placeholder at $Media"
-        Write-Host "[server] (NOTE: not a playable video - fine for the attack demo. Install ffmpeg for a real clip.)"
-        $fs  = [System.IO.File]::Create($Media)
-        $buf = New-Object byte[] 1048576
-        $rng = [System.Random]::new()
-        for ($i = 0; $i -lt $Mb; $i++) { $rng.NextBytes($buf); $fs.Write($buf, 0, $buf.Length) }
-        $fs.Close()
+# We STREAM MPEG-TS (.ts): it plays progressively in a live player, and a copy
+# truncated by the RST still plays up to the cut. $Src is the SOURCE video (your
+# own file, or set $env:MEDIA); the launcher converts it to a .ts we stream. If
+# $Src is missing it generates a 120s test clip.
+$Src     = if ($env:MEDIA) { $env:MEDIA } else { Join-Path $MediaDir "Brawl_Stars_x_Duolingo.mp4" }
+$MediaTs = Join-Path $MediaDir "stream.ts"
+New-Item -ItemType Directory -Force $MediaDir | Out-Null
+$HaveFfmpeg = [bool](Get-Command ffmpeg -ErrorAction SilentlyContinue)
+
+function Remux-ToTs([string]$InFile, [string]$OutTs) {
+    ffmpeg -y -hide_banner -loglevel error -i "$InFile" -c copy -bsf:v h264_mp4toannexb -f mpegts "$OutTs" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        ffmpeg -y -hide_banner -loglevel error -i "$InFile" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -f mpegts "$OutTs"
     }
+}
+
+if ($Src -like "*.ts") {
+    if (-not (Test-Path $Src)) { Write-Error "media $Src not found"; exit 1 }
+    $Media = $Src
+    Write-Host "[server] streaming MPEG-TS: $Media"
+} elseif (Test-Path $Src) {
+    if (-not $HaveFfmpeg) { Write-Error "need ffmpeg to convert $Src to MPEG-TS (winget install Gyan.FFmpeg)"; exit 1 }
+    Write-Host "[server] converting $Src to MPEG-TS -> $MediaTs ..."
+    Remux-ToTs $Src $MediaTs
+    $Media = $MediaTs
+} elseif ($HaveFfmpeg) {
+    Write-Host "[server] source video not found; generating a 120s MPEG-TS test clip -> $MediaTs ..."
+    ffmpeg -y -hide_banner -loglevel error `
+        -f lavfi -i "testsrc=size=640x360:rate=25:duration=120" `
+        -f lavfi -i "sine=frequency=1000:duration=120" `
+        -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac `
+        -f mpegts "$MediaTs"
+    $Media = $MediaTs
+} else {
+    $Mb = if ($env:MEDIA_MB) { [int]$env:MEDIA_MB } else { 8 }
+    Write-Host "[server] ffmpeg not found; generating a $Mb MB placeholder (NOT playable - install ffmpeg)"
+    $fs  = [System.IO.File]::Create($MediaTs)
+    $buf = New-Object byte[] 1048576
+    $rng = [System.Random]::new()
+    for ($i = 0; $i -lt $Mb; $i++) { $rng.NextBytes($buf); $fs.Write($buf, 0, $buf.Length) }
+    $fs.Close()
+    $Media = $MediaTs
 }
 
 Write-Host "[server] ------------------------------------------------------------"
@@ -59,5 +79,6 @@ Write-Host "[server] -----------------------------------------------------------
 $env:BIND_ADDR = "0.0.0.0"
 $env:PORT = $Port
 $env:MEDIA = $Media
-$env:STREAM_SECONDS = $StreamSeconds
+# Leave $env:STREAM_SECONDS untouched: if you set it, the server honours it;
+# if not, the server auto-paces at the video's real duration.
 python "$ServerPy"

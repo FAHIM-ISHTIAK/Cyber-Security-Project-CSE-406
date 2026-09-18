@@ -18,30 +18,55 @@ SERVER_PY="$REPO_ROOT/server/stream_server.py"
 MEDIA_DIR="$REPO_ROOT/phase2/media"
 
 PORT="${PORT:-9000}"
-STREAM_SECONDS="${STREAM_SECONDS:-120}"
-MEDIA="${MEDIA:-$MEDIA_DIR/sample.mp4}"
+# STREAM_SECONDS is intentionally NOT defaulted: if unset, the server auto-paces
+# at the video's real duration (via ffprobe). Export it only if you set it.
 
 [ -f "$SERVER_PY" ] || { echo "[server] FATAL: $SERVER_PY not found (copy the whole repo to this machine)"; exit 1; }
 
-# Use the video at $MEDIA (default: phase2/media/sample.mp4) if it exists;
-# otherwise generate a 120s test-pattern video with ffmpeg. Put your own video
-# at phase2/media/sample.mp4 (or set MEDIA=/path/to/video.mp4) to stream it.
-if [ ! -f "$MEDIA" ]; then
-    mkdir -p "$(dirname "$MEDIA")"
-    if command -v ffmpeg >/dev/null 2>&1; then
-        echo "[server] no media file; generating a 120s test video at $MEDIA ..."
-        ffmpeg -hide_banner -loglevel error \
-            -f lavfi -i testsrc=size=640x360:rate=25:duration=120 \
-            -f lavfi -i sine=frequency=1000:duration=120 \
-            -c:v libx264 -preset veryfast -pix_fmt yuv420p \
-            -c:a aac -shortest "$MEDIA"
-    else
-        # No ffmpeg: synthetic placeholder so the demo isn't blocked.
-        MB="${MEDIA_MB:-8}"
-        echo "[server] ffmpeg not found; generating a ${MB} MB synthetic placeholder at $MEDIA"
-        echo "[server] (NOTE: not a playable video - fine for the attack demo. Install ffmpeg for a real clip.)"
-        head -c "$((MB * 1024 * 1024))" /dev/urandom > "$MEDIA"
-    fi
+# We stream MPEG-TS (.ts): it plays progressively in a live player and a
+# truncated copy (cut by the RST) still plays up to the cut. The launcher
+# prepares phase2/media/sample.ts from whatever source is available:
+#   MEDIA=... override  ->  use it (.ts as-is, other containers remuxed to .ts)
+#   phase2/media/sample.ts exists  ->  stream it
+#   phase2/media/sample.mp4 exists ->  remux it to .ts (keeps the "drop an mp4" workflow)
+#   otherwise                      ->  generate a 120s .ts test clip with ffmpeg
+MEDIA_MP4="$MEDIA_DIR/sample.mp4"
+MEDIA_TS="$MEDIA_DIR/sample.ts"
+mkdir -p "$MEDIA_DIR"
+
+remux_to_ts() {  # $1=input  $2=output.ts  (stream-copy, fall back to re-encode)
+    ffmpeg -y -hide_banner -loglevel error -i "$1" \
+        -c copy -bsf:v h264_mp4toannexb -f mpegts "$2" 2>/dev/null \
+    || ffmpeg -y -hide_banner -loglevel error -i "$1" \
+        -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -f mpegts "$2"
+}
+
+if [ -n "${MEDIA:-}" ]; then
+    [ -f "$MEDIA" ] || { echo "[server] FATAL: MEDIA=$MEDIA set but file not found"; exit 1; }
+    case "$MEDIA" in
+        *.ts) echo "[server] using MEDIA override (already MPEG-TS): $MEDIA" ;;
+        *)    command -v ffmpeg >/dev/null 2>&1 || { echo "[server] FATAL: need ffmpeg to convert $MEDIA to MPEG-TS"; exit 1; }
+              echo "[server] converting MEDIA override $MEDIA to MPEG-TS ..."
+              remux_to_ts "$MEDIA" "$MEDIA_TS"; MEDIA="$MEDIA_TS" ;;
+    esac
+elif [ -f "$MEDIA_TS" ]; then
+    MEDIA="$MEDIA_TS"; echo "[server] streaming existing $MEDIA_TS"
+elif [ -f "$MEDIA_MP4" ] && command -v ffmpeg >/dev/null 2>&1; then
+    echo "[server] remuxing existing sample.mp4 to MPEG-TS ..."
+    remux_to_ts "$MEDIA_MP4" "$MEDIA_TS"; MEDIA="$MEDIA_TS"
+elif command -v ffmpeg >/dev/null 2>&1; then
+    echo "[server] generating a 120s MPEG-TS test video at $MEDIA_TS ..."
+    ffmpeg -y -hide_banner -loglevel error \
+        -f lavfi -i testsrc=size=640x360:rate=25:duration=120 \
+        -f lavfi -i sine=frequency=1000:duration=120 \
+        -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac \
+        -f mpegts "$MEDIA_TS"
+    MEDIA="$MEDIA_TS"
+else
+    MB="${MEDIA_MB:-8}"
+    echo "[server] ffmpeg not found; generating a ${MB} MB placeholder (NOT playable - install ffmpeg for real video)"
+    head -c "$((MB * 1024 * 1024))" /dev/urandom > "$MEDIA_TS"
+    MEDIA="$MEDIA_TS"
 fi
 
 echo "[server] ------------------------------------------------------------"
@@ -55,5 +80,7 @@ echo "[server] Serving $MEDIA on 0.0.0.0:$PORT (Ctrl+C to stop)"
 echo "[server] macOS/Linux firewall: allow inbound TCP $PORT if the client cannot connect."
 echo "[server] ------------------------------------------------------------"
 
-export BIND_ADDR="0.0.0.0" PORT MEDIA STREAM_SECONDS
+export BIND_ADDR="0.0.0.0" PORT MEDIA
+# Pass STREAM_SECONDS through only if you set it; otherwise the server auto-paces.
+[ -n "${STREAM_SECONDS:-}" ] && export STREAM_SECONDS
 exec python3 "$SERVER_PY"
