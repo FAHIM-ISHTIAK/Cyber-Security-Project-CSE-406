@@ -197,23 +197,32 @@ stream and makes the client-side exact-match RST land almost immediately;
 
 ---
 
-## 7. Defense demo (spec §6.2)
+## 7. Defense (spec §6) — see [defense/README.md](defense/README.md)
 
-**Static ARP entry** — pin the server's real MAC on the client so forged ARP
-replies are ignored; the MITM never forms and the attack collapses to the blind
-case. Get the server's real MAC (from the server, **before** attacking):
-- Windows: `getmac /v` ; Linux: `cat /sys/class/net/<iface>/address`.
+The full three-machine, cross-platform (Linux/macOS/Windows) defense lives in
+**[phase2/defense/](defense/)** and implements both proposal defenses: the
+ARP-layer defense (§6.2) that actually stops this attack, plus the RFC 5961
+TCP-layer verifier (§6.1). Quickest path — run on **both** victims **before**
+starting the attacker (each pins the other endpoint's real MAC):
 
-Pin it on the client:
-- **Windows (Admin):** `netsh interface ipv4 add neighbors "Wi-Fi" <SERVER_IP> <SERVER-MAC>`
-  (remove with `netsh interface ipv4 delete neighbors "Wi-Fi" <SERVER_IP>`)
-- **Linux:** `sudo ip neigh replace <SERVER_IP> lladdr <SERVER-MAC> nud permanent dev <iface>`
-  (see `defense/static_arp.sh`).
+- **Client machine** (pin the SERVER):
+  - Linux/macOS: `sudo phase2/defense/defend.sh --peer <SERVER_IP> --peer-mac <SERVER_MAC> --gateway auto --watch`
+  - Windows (Admin): `phase2\defense\defend.ps1 -Peer <SERVER_IP> -PeerMac <SERVER_MAC> -Gateway auto -Watch`
+- **Server machine** (pin the CLIENT): same command with the **client's** IP/MAC.
 
-Re-run the attack: the injector never sees the flow and playback continues.
-(RFC 5961 exact-match is already demonstrated by the on-path attack succeeding
+Get the peer's real MAC on the peer itself (`getmac /v` on Windows,
+`cat /sys/class/net/<iface>/address` on Linux), or omit `--peer-mac` to auto-learn
+(reliable only before the attacker starts). This pins a permanent static entry so
+forged ARP replies are ignored — the MITM never forms — and starts `arp_watch.py`,
+which prints an `ARP POISONING` alert each time the attacker tries.
+
+Re-run the attack: the injector never locks on, playback continues, and the
+monitor logs every neutralised attempt. RFC 5961's exact-match rule (run
+`phase2/defense/rfc5961_check.sh`) explains why the on-path attacker succeeds
 where a blind in-window guess would only draw a challenge ACK — contrast the
-on-path run here with the "no MITM" run above.)
+on-path run with the "no MITM" run. See **[defense/README.md](defense/README.md)**
+for by-hand usage, the with/without-defense comparison (§5 / Table 2), undo steps,
+and the Dynamic ARP Inspection note.
 
 ---
 
@@ -240,7 +249,8 @@ on-path run here with the "no MITM" run above.)
 | §2.4 / §3 read live seq, forge RST, seq-drift burst | `attacker/rst_attack.py` (reused) |
 | §2.3 SPAN/port-mirror fallback | N/A on Wi-Fi; `capture.sh` records the on-path view instead |
 | §5 outcomes (stall, no-FIN RST, ss/netstat/pcap) | client output + `capture.sh` + `netstat`/`ss` |
-| §6.2 ARP-layer defense (static ARP) | §7 above + `defense/static_arp.sh` |
+| §6.1 RFC 5961 (TCP-layer defense) | `phase2/defense/rfc5961_check.sh` |
+| §6.2 ARP-layer defense (static ARP + detection) | `phase2/defense/` (`defend.*`, `static_arp.*`, `arp_watch.py`) |
 
 Everything runs on real hardware over Wi-Fi, confirming the Phase 1 result holds
 outside the Docker virtual network stack.

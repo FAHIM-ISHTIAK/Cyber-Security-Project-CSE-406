@@ -176,6 +176,12 @@ docker compose exec videoclient /bin/sh -c "ip neigh replace 172.20.0.10 lladdr 
 See `defense/static_arp.sh` for a helper and notes. Re-run the attack: the
 injector never sees the flow and playback continues.
 
+> **Three-machine (Phase 2) defense.** The Docker helper above is Phase-1 only
+> (hard-coded `eth0` + `172.20.0.x`). For the physical three-machine demo, use the
+> cross-platform (Linux/macOS/Windows) defense in **[phase2/defense/](phase2/defense/README.md)**,
+> which implements both the ARP-layer defense (§6.2: static pinning + live
+> `arp_watch.py` detection) and the RFC 5961 TCP-layer verifier (§6.1).
+
 ---
 
 ## 8. Reset / tear down
