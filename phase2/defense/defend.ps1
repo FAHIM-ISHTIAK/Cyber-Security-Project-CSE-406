@@ -36,9 +36,17 @@ $here   = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $static = Join-Path $here "static_arp.ps1"
 $watchpy= Join-Path $here "arp_watch.py"
 # Resolve a REAL Python, skipping the Windows Store stub (the fake python.exe in
-# WindowsApps that prints "Python was not found"). Prefer the 'py' launcher.
+# WindowsApps that prints "Python was not found").
 $py = $null; $pyPre = @()
-$launcher = (Get-Command py -ErrorAction SilentlyContinue).Source
+# 0) Prefer the project's virtualenv (what this project uses everywhere). This is
+#    the reliable choice on a machine whose only "python" is the Store stub.
+$repoRoot = (Resolve-Path "$here\..\..").Path
+foreach ($v in @(".venv", "venv")) {
+    $cand = Join-Path $repoRoot "$v\Scripts\python.exe"
+    if (Test-Path $cand) { $py = $cand; break }
+}
+# 1) Otherwise prefer the 'py' launcher.
+$launcher = if ($py) { $null } else { (Get-Command py -ErrorAction SilentlyContinue).Source }
 if ($launcher) {
     try { & $launcher -3 --version *> $null; if ($LASTEXITCODE -eq 0) { $py = $launcher; $pyPre = @('-3') } } catch {}
 }
